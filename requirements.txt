@@ -1,5 +1,6 @@
 streamlit
+streamlit-aggrid
 pandas
 sqlalchemy
-streamlit-aggrid
 python-Levenshtein
+pymysql
