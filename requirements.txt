@@ -1,5 +1,5 @@
 streamlit
-st-aggrid
+st_aggrid
 pandas
 sqlalchemy
 Levenshtein
