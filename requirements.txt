@@ -2,3 +2,5 @@ streamlit
 st-aggrid
 pandas
 sqlalchemy
+Levenshtein
+time
