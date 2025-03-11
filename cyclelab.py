@@ -46,99 +46,209 @@ key2_options = ['키4', '키5', '키6']
 
 # st.subheader('CycleLab - 악기 연습')
 
+
+def update_db(dataframe_name, dataframe):
+    try:
+        if dataframe_name == 'todo':
+            dataframe.to_sql('todo', con=engine_mainDB, if_exists='replace', index=False)
+            return True
+        else:
+            return False
+    except Exception as e:
+        print(f"에러 발생: {e}")
+        return False
+
+
+
+# 데이터 로드 (테이블이 없으면 생성)
+def load_from_db():
+    def get_dataframe_from_db(table_name, columns, create_table_sql):
+        try:
+            return pd.read_sql(f'SELECT * FROM {table_name}', con=engine_mainDB)
+        except Exception as e:
+            with engine_mainDB.connect() as connection:
+                connection.execute(text(create_table_sql))
+                connection.commit()
+            return pd.DataFrame(columns=columns)
+
+    df_todo = get_dataframe_from_db(
+        'todo',
+        ['title', 'start_date', 'repeat_cycle', 'D_Day', 'days_elapsed', 'accumulated_time', 'completion_count', 'status'],
+        """
+        CREATE TABLE IF NOT EXISTS todo (
+            title VARCHAR(255),
+            start_date DATE,
+            repeat_cycle INT,
+            D_Day INT, 
+            days_elapsed INT,
+            accumulated_time INT,
+            completion_count INT,
+            status VARCHAR(255)
+        )
+        """
+    )
+    return df_todo
+
+df_todo = load_from_db()
+
+
+def add_todo():
+    global df_todo
+    global locate_doto
+
+    if st.session_state.formState_addToDo == 'open':
+        col2 = st.columns(1)
+        with col2[0]:
+            title_input = st.text_input('곡명', value="", key='title_input', help='곡명을 입력하세요')
+        col3 = st.columns(2)
+        with col3[0]:
+            repeat_cycle_input = int(st.number_input('반복주기 (일)', min_value=1, value=1, key='repeat_cycle_input', help='반복주기(일)를 입력하세요', step=1))
+        with col3[1]:
+            start_date_input = st.date_input('시작일', value=pd.to_datetime('today').date(), key='start_date_input', help='시작일을 선택하세요')
+        col4 = st.columns(2)
+        with col4[0]:
+            status_input = st.selectbox('상태', options=['미처리', '연습중', '예정'], index=0, key='status_input', help='상태를 선택하세요')
+        col6 = st.columns(4)
+        with col6[2]:
+            if st.button('저장'):
+                if title_input != "":
+                    st.session_state.formState_addToDo = 'close'
+                    st.session_state.show_title_form = False
+
+                    # 일련번호 생성
+                    if df_todo.empty:
+                        new_id = 1
+                    else:
+                        new_id = df_todo['id'].max() + 1
+
+                    # 새로운 데이터 생성
+                    df_new_todo = pd.DataFrame({
+                        'id': [new_id],
+                        'title': [title_input],
+                        'D_Day': [0], 
+                        'start_date': [start_date_input], 
+                        'repeat_cycle': [repeat_cycle_input],
+                        'days_elapsed': [0], 
+                        'accumulated_time': [0], 
+                        'completion_count': [0],
+                        'status': [status_input]
+                    })
+
+                    # 기존 DataFrame이 존재하는지 확인
+                    if df_todo.empty:
+                        df_todo = df_new_todo
+                    else:
+                        df_todo = pd.concat([df_todo, df_new_todo], ignore_index=True)
+
+                    # DB 업데이트 및 상태 변경
+                    if update_db('todo', df_todo):
+                        st.success('목록에 추가되었습니다')
+                        st.rerun()
+                    else:
+                        st.error('데이터 저장 중 오류가 발생했습니다.')
+                else:
+                    st.error('곡명을 입력하세요')
+        with col6[3]:
+            if st.button('취소'):
+                st.session_state.formState_addToDo = 'close'
+                st.session_state.show_title_form = False
+                st.rerun()
+
+
+
+
 @st.fragment
-def show_stopWatch():
-    # 초기화
-    if 'start_time' not in st.session_state:
-        st.session_state.start_time = datetime.datetime.now()
-    if 'running' not in st.session_state:
-        st.session_state.running = False
-    if 'elapsed_time' not in st.session_state:
-        st.session_state.elapsed_time = 0
-    if 'timer_last_updated' not in st.session_state:
-        st.session_state.timer_last_updated = datetime.datetime.now()
+def show_stopWatch(todo_id):  # todo_id 추가
+    # 초기화 (세션 상태 키에 todo_id 추가)
+    if f'start_time_{todo_id}' not in st.session_state:
+        st.session_state[f'start_time_{todo_id}'] = datetime.datetime.now()
+    if f'running_{todo_id}' not in st.session_state:
+        st.session_state[f'running_{todo_id}'] = False
+    if f'elapsed_time_{todo_id}' not in st.session_state:
+        st.session_state[f'elapsed_time_{todo_id}'] = 0
+    if f'timer_last_updated_{todo_id}' not in st.session_state:
+        st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
 
     # 타이머 업데이트 함수
     def update_elapsed_time():
-        if st.session_state.running:
+        if st.session_state[f'running_{todo_id}']:
             current_time = datetime.datetime.now()
-            time_diff = current_time - st.session_state.timer_last_updated
-            st.session_state.elapsed_time += time_diff.seconds
-            st.session_state.timer_last_updated = current_time
+            time_diff = current_time - st.session_state[f'timer_last_updated_{todo_id}']
+            st.session_state[f'elapsed_time_{todo_id}'] += time_diff.seconds
+            st.session_state[f'timer_last_updated_{todo_id}'] = current_time
 
     # 타이머 시작/정지 함수
     def toggle_timer():
-        if st.session_state.running:
-            # 정지할 때
+        if st.session_state[f'running_{todo_id}']:
             update_elapsed_time()
-            st.session_state.running = False
+            st.session_state[f'running_{todo_id}'] = False
         else:
-            # 시작할 때
-            st.session_state.timer_last_updated = datetime.datetime.now()
-            st.session_state.running = True
+            st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
+            st.session_state[f'running_{todo_id}'] = True
 
     # 타이머 리셋 함수
     def reset_timer():
-        st.session_state.elapsed_time = 0
-        st.session_state.running = False
-        st.session_state.timer_last_updated = datetime.datetime.now()
+        st.session_state[f'elapsed_time_{todo_id}'] = 0
+        st.session_state[f'running_{todo_id}'] = False
+        st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
 
-    # 실행 중이면 시간 업데이트
-    if st.session_state.running:
+    def settle_timer():
+        # st.session_state[f'elapsed_time_{todo_id}'] = 0
+        # st.session_state[f'running_{todo_id}'] = False
+        # st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
+        return
+
+        
+
+    if st.session_state[f'running_{todo_id}']:
         update_elapsed_time()
 
-    # 타이머와 버튼을 한 줄에 배치
-    col1, col2, col3 = st.columns([3, 1, 1])
+    #스톱워치 표시
+    hours = st.session_state[f'elapsed_time_{todo_id}'] // 3600
+    minutes = (st.session_state[f'elapsed_time_{todo_id}'] % 3600) // 60
+    seconds = st.session_state[f'elapsed_time_{todo_id}'] % 60
+    timer_display = f"{hours:02}:{minutes:02}:{seconds:02}"
     
-    with col1:
-        # 시간 표시 (시:분:초 형식)
-        hours = st.session_state.elapsed_time // 3600
-        minutes = (st.session_state.elapsed_time % 3600) // 60
-        seconds = st.session_state.elapsed_time % 60
-        timer_display = f"{hours:02}:{minutes:02}:{seconds:02}"
+    timer_html = f"""
+    <div id="timer_{todo_id}" style="font-size: 48px; font-weight: bold; color: #FF0000;">
+        {timer_display}
+    </div>
+    <script>
+        let seconds = {st.session_state[f'elapsed_time_{todo_id}']};
+        let running = {'true' if st.session_state[f'running_{todo_id}'] else 'false'};
+        let timerElement = document.getElementById('timer_{todo_id}');
         
-        # JavaScript로 타이머 표시
-        timer_html = f"""
-        <div id="timer" style="font-size: 48px; font-weight: bold; color: #FF0000;">
-            {timer_display}
-        </div>
-        <script>
-            let seconds = {st.session_state.elapsed_time};
-            let running = {'true' if st.session_state.running else 'false'};
-            let timerElement = document.getElementById('timer');
-            
-            function updateTimerDisplay() {{
-                if (running) {{
-                    seconds++;
-                    let h = Math.floor(seconds / 3600);
-                    let m = Math.floor((seconds % 3600) / 60);
-                    let s = seconds % 60;
-                    timerElement.innerText = 
-                        `${{h.toString().padStart(2, '0')}}:${{m.toString().padStart(2, '0')}}:${{s.toString().padStart(2, '0')}}`;
-                }}
+        function updateTimerDisplay() {{
+            if (running) {{
+                seconds++;
+                let h = Math.floor(seconds / 3600);
+                let m = Math.floor((seconds % 3600) / 60);
+                let s = seconds % 60;
+                timerElement.innerText = 
+                    `${{h.toString().padStart(2, '0')}}:${{m.toString().padStart(2, '0')}}:${{s.toString().padStart(2, '0')}}`;
             }}
-            
-            // 1초마다 타이머 업데이트
-            let intervalId = setInterval(updateTimerDisplay, 1000);
-        </script>
-        """
-        components.html(timer_html, height=60)
+        }}
+        let intervalId = setInterval(updateTimerDisplay, 1000);
+    </script>
+    """
+    components.html(timer_html, height=60)
 
-    # 정지/시작 버튼
-    with col2:
-        st.button("정지" if st.session_state.running else "시작", 
-                 key='toggle_button', 
-                 on_click=toggle_timer,
-                 use_container_width=True)
 
-    # 리셋 버튼
-    with col3:
-        st.button("리셋", 
-                 key='reset_button', 
-                 on_click=reset_timer,
-                 use_container_width=True)
+    st.button("정지" if st.session_state[f'running_{todo_id}'] else "시작", 
+             key=f'toggle_button_{todo_id}',  # 고유 키
+             on_click=toggle_timer,
+             use_container_width=True)
 
-    # 버튼 스타일 조정
+    st.button("리셋", 
+             key=f'reset_button_{todo_id}',  # 고유 키
+             on_click=reset_timer,
+             use_container_width=True)
+
+    st.button("정산", 
+             key=f'settle_button_{todo_id}',  # 고유 키
+             on_click=settle_timer,
+             use_container_width=True)
+
     st.markdown("""
     <style>
     div[data-testid="column"] button {
@@ -150,20 +260,34 @@ def show_stopWatch():
     </style>
     """, unsafe_allow_html=True)
 
-
-
-
-
 def show_selected_row(selected_data):
+    st.write(selected_data['title'].iloc[0])
+
+    # 현재 선택된 todo_id
+    new_todo_id = selected_data['id'].iloc[0]
+
+    # 이전에 선택된 todo_id가 있고, 새로운 id와 다를 경우 이전 타이머 일시정지
+    if 'current_todo_id' in st.session_state and st.session_state['current_todo_id'] != new_todo_id:
+        old_todo_id = st.session_state['current_todo_id']
+        if f'running_{old_todo_id}' in st.session_state and st.session_state[f'running_{old_todo_id}']:
+            # 이전 타이머가 실행 중이면 시간 업데이트 후 정지
+            current_time = datetime.datetime.now()
+            time_diff = current_time - st.session_state[f'timer_last_updated_{old_todo_id}']
+            st.session_state[f'elapsed_time_{old_todo_id}'] += time_diff.seconds
+            st.session_state[f'timer_last_updated_{old_todo_id}'] = current_time
+            st.session_state[f'running_{old_todo_id}'] = False
+
+    # 현재 todo_id 업데이트
+    st.session_state['current_todo_id'] = new_todo_id
     st.session_state.formState_selected_row = 'open'
     
-    show_stopWatch()
+    # 'id'를 사용하여 타이머 호출
+    todo_id = new_todo_id
+    show_stopWatch(todo_id)
     
     st.write("상세 정보:")
     print(selected_data['title'])
-
     
-    # 고유한 키 생성을 위한 타임스탬프 추가
     timestamp = int(time.time() * 1000)
     
     col1 = st.columns(1)
@@ -206,138 +330,22 @@ def show_selected_row(selected_data):
             st.session_state.formState_selected_row = 'close'
             return
 
-        
-    
-
-
-
-def update_db(dataframe_name, dataframe):
-    try:
-        if dataframe_name == 'todo':
-            dataframe.to_sql('todo', con=engine_mainDB, if_exists='replace', index=False)
-            return True
-        else:
-            return False
-    except Exception as e:
-        print(f"에러 발생: {e}")
-        return False
-
-
-
-# 데이터 로드 (테이블이 없으면 생성)
-def load_from_db():
-    def get_dataframe_from_db(table_name, columns, create_table_sql):
-        try:
-            return pd.read_sql(f'SELECT * FROM {table_name}', con=engine_mainDB)
-        except Exception as e:
-            with engine_mainDB.connect() as connection:
-                connection.execute(text(create_table_sql))
-                connection.commit()
-            return pd.DataFrame(columns=columns)
-
-    df_todo = get_dataframe_from_db(
-        'todo',
-        ['title', 'start_date', 'repeat_cycle', 'D_Day', 'days_elapsed', 'accumulated_time', 'completion_count', 'status'],
-        """
-        CREATE TABLE IF NOT EXISTS todo (
-            title VARCHAR(255),
-            start_date DATE,
-            repeat_cycle INT,
-            D_Day INT, 
-            days_elapsed INT,
-            accumulated_time INT,
-            completion_count INT,
-            status VARCHAR(255)
-        )
-        """
-    )
-
-
-    return df_todo
-
-
-
-df_todo = load_from_db()
-
-
-def add_todo():
-    global df_todo
-    global locate_doto
-
-    if st.session_state.formState_addToDo == 'open':
-        col2 = st.columns(1)
-        with col2[0]:
-            title_input = st.text_input('곡명', value="", key='title_input', help='곡명을 입력하세요')
-        col3 = st.columns(2)
-        with col3[0]:
-            repeat_cycle_input = int(st.number_input('반복주기 (일)', min_value=1, value=1, key='repeat_cycle_input', help='반복주기(일)를 입력하세요', step=1))
-        with col3[1]:
-            start_date_input = st.date_input('시작일', value=pd.to_datetime('today').date(), key='start_date_input', help='시작일을 선택하세요')
-        col4 = st.columns(2)
-        with col4[0]:
-            status_input = st.selectbox('상태', options=['미처리', '연습중', '완료', '예정'], index=0, key='status_input', help='상태를 선택하세요')
-        col6 = st.columns(4)
-        with col6[2]:
-            if st.button('저장'):
-                if title_input != "":
-                    st.session_state.formState_addToDo = 'close'
-                    st.session_state.show_title_form = False
-
-                    # 새로운 데이터 생성
-                    df_new_todo = pd.DataFrame({
-                        'title': [title_input],
-                        'D_Day': [0], 
-                        'start_date': [start_date_input], 
-                        'repeat_cycle': [repeat_cycle_input],
-                        'days_elapsed': [0], 
-                        'accumulated_time': [0], 
-                        'completion_count': [0],
-                        'status': [status_input]
-                    })
-
-                    # 기존 DataFrame이 존재하는지 확인
-                    if df_todo.empty:
-                        df_todo = df_new_todo
-                    else:
-                        df_todo = pd.concat([df_todo, df_new_todo], ignore_index=True)
-
-                    # DB 업데이트 및 상태 변경
-                    if update_db('todo', df_todo):
-                        st.success('목록에 추가되었습니다')
-                        st.rerun()
-                    else:
-                        st.error('데이터 저장 중 오류가 발생했습니다.')
-                else:
-                    st.error('곡명을 입력하세요')
-        with col6[3]:
-            if st.button('취소'):
-                st.session_state.formState_addToDo = 'close'
-                st.session_state.show_title_form = False
-                st.rerun()
-
-
-
 def show_list_todo(status):
     if status == '추가':
         df_filtered_todo = df_todo[df_todo['status'] == '미처리']
     else:
         df_filtered_todo = df_todo[df_todo['status'] == status]
 
-    # GridOptionsBuilder 설정
     gb = GridOptionsBuilder.from_dataframe(df_filtered_todo[['title', 'D_Day']])
-    gb.configure_selection(selection_mode="single", use_checkbox=False)  # 단일 행 선택, 체크박스 제거
-    
-    # 그리드 전체 옵션 설정
+    gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(
         domLayout='autoHeight',
         rowSelection="single",
-        suppressRowClickSelection=False,  # 행 클릭으로 선택 가능
+        suppressRowClickSelection=False,
         suppressAutoSize=True,
         suppressColumnVirtualisation=True,
         suppressMenu=True
     )
-
-    # 컬럼 설정
     gb.configure_column(
         "title",
         headerName="Title",
@@ -365,20 +373,17 @@ def show_list_todo(status):
         suppressMenu=True
     )
 
-    # AgGrid 렌더링 및 선택된 행 반환
     grid_response = AgGrid(
         df_filtered_todo[['title', 'D_Day']],
         gridOptions=gb.build(),
-        update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.VALUE_CHANGED,  # 선택 및 값 변경 감지
+        update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.VALUE_CHANGED,
         allow_unsafe_jscode=True,
         height=300,
         fit_columns_on_grid_load=False,
-        key=f"aggrid_{status}"  # 고유한 키 사용
+        key=f"aggrid_{status}"
     )
 
-
-
-    # 선택된 행 가져오기
+    # 선택된 행이 있을 때만 처리 (타이머는 show_selected_row에서 표시)
     if grid_response['selected_rows'] is not None:
         st.session_state.show_selected_row = True
         selected_title = grid_response['selected_rows'].iloc[0]['title']
@@ -386,13 +391,11 @@ def show_list_todo(status):
     else:
         df_todo_selected = pd.DataFrame()
 
-
     print(df_todo_selected)
     print(st.session_state.show_selected_row)
     print(st.session_state.formState_selected_row)
 
-
-    if not df_todo_selected.empty and st.session_state.show_selected_row == True:
+    if not df_todo_selected.empty and st.session_state.show_selected_row == True and status == '연습중':
         if st.session_state.show_selected_row == True:
             show_selected_row(df_todo_selected.head(1))
     
@@ -400,30 +403,29 @@ def show_list_todo(status):
 
 
 
-
-
 with st.sidebar:
     st.header("추가, 편집")
 
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["연습중", "완료", "예정", "미처리", "/", "추가"])
+
+
+
+
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["연습중", "예정", "미처리", "/", "추가"])
 with tab1:
     show_list_todo(status='연습중')
 
 with tab2:
-    show_list_todo(status='완료')
-
-with tab3:
     show_list_todo(status='예정')
 
-with tab4:
+with tab3:
     st.session_state.show_selected_row = False
     show_list_todo(status='미처리')
 
-with tab5:
+with tab4:
     pass
 
-with tab6:
+with tab5:
     show_list_todo(status='추가')
 
 
