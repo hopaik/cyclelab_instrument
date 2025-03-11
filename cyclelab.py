@@ -81,7 +81,7 @@ def show_selected_row(selected_data):
             st.session_state.formState_editToDo = 'close'
             st.session_state.show_selected_row = False
             st.session_state.formState_selected_row = 'close'
-            st.rerun()
+            # st.rerun()
     with col4[1]:
         if st.button('닫기', key=f'selected_data_close_{timestamp}'):
             st.session_state.show_selected_row = False
@@ -189,7 +189,7 @@ def add_todo():
                     # DB 업데이트 및 상태 변경
                     if update_db('todo', df_todo):
                         st.success('목록에 추가되었습니다')
-                        st.rerun()
+                        # st.rerun()
                     else:
                         st.error('데이터 저장 중 오류가 발생했습니다.')
                 else:
@@ -198,7 +198,7 @@ def add_todo():
             if st.button('취소'):
                 st.session_state.formState_addToDo = 'close'
                 st.session_state.show_title_form = False
-                st.rerun()
+                # st.rerun()
 
 
 
