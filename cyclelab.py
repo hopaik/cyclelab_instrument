@@ -46,7 +46,7 @@ key2_options = ['키4', '키5', '키6']
 
 # st.subheader('CycleLab - 악기 연습')
 
-
+@st.fragment
 def show_stopWatch():
     # 초기화
     if 'start_time' not in st.session_state:
@@ -149,6 +149,10 @@ def show_stopWatch():
     }
     </style>
     """, unsafe_allow_html=True)
+
+
+
+
 
 def show_selected_row(selected_data):
     st.session_state.formState_selected_row = 'open'
