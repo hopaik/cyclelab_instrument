@@ -9,7 +9,7 @@ import threading
 import streamlit.components.v1 as components
 
 # Set the theme to night mode
-st.set_page_config(layout="wide", initial_sidebar_state="expanded", theme={"primaryColor": "#1f77b4", "backgroundColor": "#0e1117", "secondaryBackgroundColor": "#262730", "textColor": "#ffffff", "font": "sans serif"})
+st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
 # DB 연결 정보
 config_maindb = {
@@ -362,107 +362,4 @@ def show_selected_row(selected_data):
 def show_list_todo(status):
     if status == '추가':
         df_filtered_todo = df_todo[df_todo['status'] == '미처리']
-    else:
-        df_filtered_todo = df_todo[df_todo['status'] == status]
-
-    gb = GridOptionsBuilder.from_dataframe(df_filtered_todo[['title', 'D_Day']])
-    gb.configure_selection(selection_mode="single", use_checkbox=False)
-    gb.configure_grid_options(
-        domLayout='autoHeight',
-        rowSelection="single",
-        suppressRowClickSelection=False,
-        suppressAutoSize=True,
-        suppressColumnVirtualisation=True,
-        suppressMenu=True
-    )
-    gb.configure_column(
-        "title",
-        headerName="Title",
-        width=360,
-        maxWidth=360,
-        minWidth=360,
-        resizable=False,
-        sortable=False,
-        filter=False,
-        suppressMovable=True,
-        suppressSizeToFit=True,
-        suppressMenu=True
-    )
-    gb.configure_column(
-        "D_Day",
-        headerName="D-Day",
-        width=100,
-        maxWidth=100,
-        minWidth=100,
-        resizable=False,
-        sortable=False,
-        filter=False,
-        suppressMovable=True,
-        suppressSizeToFit=True,
-        suppressMenu=True
-    )
-
-    grid_response = AgGrid(
-        df_filtered_todo[['title', 'D_Day']],
-        gridOptions=gb.build(),
-        update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.VALUE_CHANGED,
-        allow_unsafe_jscode=True,
-        height=300,
-        fit_columns_on_grid_load=False,
-        key=f"aggrid_{status}"
-    )
-
-    # 선택된 행이 있을 때만 처리 (타이머는 show_selected_row에서 표시)
-    if grid_response['selected_rows'] is not None:
-        st.session_state.show_selected_row = True
-        selected_title = grid_response['selected_rows'].iloc[0]['title']
-        df_todo_selected = df_todo[df_todo['title'] == selected_title]
-    else:
-        df_todo_selected = pd.DataFrame()
-
-    print(df_todo_selected)
-    print(st.session_state.show_selected_row)
-    print(st.session_state.formState_selected_row)
-
-    if not df_todo_selected.empty and st.session_state.show_selected_row == True and status == '연습중':
-        if st.session_state.show_selected_row == True:
-            show_selected_row(df_todo_selected.head(1))
-    
-    return False
-
-
-
-with st.sidebar:
-    st.header("추가, 편집")
-
-
-
-
-
-
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["연습중", "예정", "미처리", "/", "추가"])
-with tab1:
-    show_list_todo(status='연습중')
-
-with tab2:
-    show_list_todo(status='예정')
-
-with tab3:
-    st.session_state.show_selected_row = False
-    show_list_todo(status='미처리')
-
-with tab4:
-    pass
-
-with tab5:
-    show_list_todo(status='추가')
-
-
-if st.session_state.formState_addToDo == 'close':
-    if st.button('추가'):
-        st.session_state.formState_addToDo = 'open'
-        add_todo()
-else:
-    add_todo()
-
 
