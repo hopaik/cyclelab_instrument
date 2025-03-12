@@ -11,6 +11,7 @@ import streamlit.components.v1 as components
 # Set the theme to night mode
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
+
 # DB 연결 정보
 config_maindb = {
     "user": "hopaik", 
