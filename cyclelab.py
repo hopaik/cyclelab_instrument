@@ -266,12 +266,10 @@ def show_stopWatch(todo_id):  # todo_id 추가
 
 
 
+
 def show_data_info(selected_data):
     with st.container(key=f'data_info_{selected_data["id"].iloc[0]}'):
-        st.markdown(
-            f"<div style='line-height: 0.75;'><span style='color: yellow; font-size: 18px;'>{str(selected_data['title'].iloc[0])} </span>",
-            unsafe_allow_html=True
-        )
+        st.markdown(f"<div style='line-height: 0.3;'><span style='color: yellow; font-size: 18px;'>{str(selected_data['title'].iloc[0])} </span>", unsafe_allow_html=True)
         st.markdown(
             f"<div style='line-height: 1.5;'><span style='color: white; font-size: 14px;'>{str(selected_data['start_date'].iloc[0]) + ' ~ ' + str(selected_data['start_date'].iloc[0])} </span>"
             f"<span style='color: gray; font-size: 14px;'>{'(연속 ' + str(selected_data['repeat_cycle'].iloc[0]) + '회 / ' + str(selected_data['repeat_cycle'].iloc[0]) + '일 간격)'} </span>"
@@ -368,20 +366,21 @@ def show_list_todo(status):
     gb = GridOptionsBuilder.from_dataframe(df_filtered_todo[['title', 'D_Day']])
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(
-        domLayout='autoHeight',
+        domLayout='normal',  # 높이 고정용
         rowSelection="single",
         suppressRowClickSelection=False,
         suppressAutoSize=True,
         suppressColumnVirtualisation=True,
-        suppressMenu=True
+        suppressMenu=True,
+        suppressHorizontalScroll=True  # 좌우 스크롤 비활성화
     )
     gb.configure_column(
         "title",
         headerName="Title",
-        width=360,
+        width=360,  # 폭 고정
         maxWidth=360,
         minWidth=360,
-        resizable=False,
+        resizable=False,  # 크기 조정 불가
         sortable=False,
         filter=False,
         suppressMovable=True,
@@ -391,10 +390,10 @@ def show_list_todo(status):
     gb.configure_column(
         "D_Day",
         headerName="D-Day",
-        width=100,
+        width=100,  # 폭 고정
         maxWidth=100,
         minWidth=100,
-        resizable=False,
+        resizable=False,  # 크기 조정 불가
         sortable=False,
         filter=False,
         suppressMovable=True,
@@ -402,17 +401,29 @@ def show_list_todo(status):
         suppressMenu=True
     )
 
+    # 8행 고정 높이 계산
+    row_height = 30  # 각 행의 높이
+    header_height = 40  # 헤더 높이
+    fixed_rows = 8
+    grid_height = header_height + (row_height * fixed_rows)  # 약 280px
+
+    # 커스텀 CSS로 스크롤바 미세 조정
+    custom_css = {
+        ".ag-root-wrapper": {"overflow-x": "hidden", "margin-bottom": "0px"},  # 좌우 스크롤 숨김
+        ".ag-body-horizontal-scroll": {"display": "none"},  # 가로 스크롤바 제거
+    }
+
     grid_response = AgGrid(
         df_filtered_todo[['title', 'D_Day']],
         gridOptions=gb.build(),
         update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.VALUE_CHANGED,
         allow_unsafe_jscode=True,
-        height=300,
-        fit_columns_on_grid_load=False,
+        height=grid_height,  # 8행 고정 높이
+        custom_css=custom_css,  # 좌우 스크롤 제거용 CSS
+        fit_columns_on_grid_load=False,  # 컬럼 자동 맞춤 비활성화
         key=f"aggrid_{status}"
     )
 
-    # 선택된 행이 있을 때만 처리 (타이머는 show_selected_row에서 표시)
     if grid_response['selected_rows'] is not None:
         st.session_state.show_selected_row = True
         selected_title = grid_response['selected_rows'].iloc[0]['title']
@@ -420,16 +431,10 @@ def show_list_todo(status):
     else:
         df_todo_selected = pd.DataFrame()
 
-    print(df_todo_selected)
-    print(st.session_state.show_selected_row)
-    print(st.session_state.formState_selected_row)
+    if not df_todo_selected.empty and st.session_state.show_selected_row and status == '연습중':
+        show_selected_row(df_todo_selected.head(1))
 
-    if not df_todo_selected.empty and st.session_state.show_selected_row == True and status == '연습중':
-        if st.session_state.show_selected_row == True:
-            show_selected_row(df_todo_selected.head(1))
-    
     return False
-
 
 
 with st.sidebar:
