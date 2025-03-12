@@ -10,7 +10,6 @@ import streamlit.components.v1 as components
 
 st.set_page_config(layout="wide")
 
-
 # DB 연결 정보
 config_maindb = {
     "user": "hopaik", 
@@ -28,8 +27,6 @@ engine_mainDB = create_engine(
 # 세션 상태 초기화
 if 'formState_addToDo' not in st.session_state:
     st.session_state.formState_addToDo = 'close'
-# if 'formState_editToDo' not in st.session_state:
-#     st.session_state.formState_editToDo = 'close'
 if 'show_title_form' not in st.session_state:
     st.session_state.show_title_form = False
 if 'show_selected_row' not in st.session_state:
@@ -37,15 +34,11 @@ if 'show_selected_row' not in st.session_state:
 if 'formState_selected_row' not in st.session_state:
     st.session_state.formState_selected_row = 'close'
 
-
 genre_options = ['장르1', '장르2', '장르3']
 style1_options = ['스타일1', '스타일2', '스타일3']
 style2_options = ['스타일4', '스타일5', '스타일6']
 key1_options = ['키1', '키2', '키3']
 key2_options = ['키4', '키5', '키6']
-
-# st.subheader('CycleLab - 악기 연습')
-
 
 def update_db(dataframe_name, dataframe):
     try:
@@ -57,8 +50,6 @@ def update_db(dataframe_name, dataframe):
     except Exception as e:
         print(f"에러 발생: {e}")
         return False
-
-
 
 # 데이터 로드 (테이블이 없으면 생성)
 def load_from_db():
@@ -90,7 +81,6 @@ def load_from_db():
     return df_todo
 
 df_todo = load_from_db()
-
 
 def add_todo():
     global df_todo
@@ -154,12 +144,8 @@ def add_todo():
                 st.session_state.show_title_form = False
                 st.rerun()
 
-
-
-
 @st.fragment
-def show_stopWatch(todo_id):  # todo_id 추가
-    # 초기화 (세션 상태 키에 todo_id 추가)
+def show_stopWatch(todo_id):
     if f'start_time_{todo_id}' not in st.session_state:
         st.session_state[f'start_time_{todo_id}'] = datetime.datetime.now()
     if f'running_{todo_id}' not in st.session_state:
@@ -169,7 +155,6 @@ def show_stopWatch(todo_id):  # todo_id 추가
     if f'timer_last_updated_{todo_id}' not in st.session_state:
         st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
 
-    # 타이머 업데이트 함수
     def update_elapsed_time():
         if st.session_state[f'running_{todo_id}']:
             current_time = datetime.datetime.now()
@@ -177,7 +162,6 @@ def show_stopWatch(todo_id):  # todo_id 추가
             st.session_state[f'elapsed_time_{todo_id}'] += time_diff.seconds
             st.session_state[f'timer_last_updated_{todo_id}'] = current_time
 
-    # 타이머 시작/정지 함수
     def toggle_timer():
         if st.session_state[f'running_{todo_id}']:
             update_elapsed_time()
@@ -186,23 +170,17 @@ def show_stopWatch(todo_id):  # todo_id 추가
             st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
             st.session_state[f'running_{todo_id}'] = True
 
-    # 타이머 리셋 함수
     def reset_timer():
         st.session_state[f'elapsed_time_{todo_id}'] = 0
         st.session_state[f'running_{todo_id}'] = False
         st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
 
     def settle_timer():
-        # st.session_state[f'elapsed_time_{todo_id}'] = 0
-        # st.session_state[f'running_{todo_id}'] = False
-        # st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
         return
-
 
     if st.session_state[f'running_{todo_id}']:
         update_elapsed_time()
 
-    #스톱워치 표시
     hours = st.session_state[f'elapsed_time_{todo_id}'] // 3600
     minutes = (st.session_state[f'elapsed_time_{todo_id}'] % 3600) // 60
     seconds = st.session_state[f'elapsed_time_{todo_id}'] % 60
@@ -232,40 +210,35 @@ def show_stopWatch(todo_id):  # todo_id 추가
     """
     components.html(timer_html, height=60)
 
-    # 버튼을 하나의 컨테이너로 묶어 한 행에 표시
     with st.container():
         col1, col2, col3 = st.columns(3)
         with col1:
             st.button("정지" if st.session_state[f'running_{todo_id}'] else "시작", 
-                     key=f'toggle_button_{todo_id}',  # 고유 키
+                     key=f'toggle_button_{todo_id}', 
                      on_click=toggle_timer,
                      use_container_width=True)
         with col2:
             st.button("리셋", 
-                     key=f'reset_button_{todo_id}',  # 고유 키
+                     key=f'reset_button_{todo_id}', 
                      on_click=reset_timer,
                      use_container_width=True)
         with col3:
             st.button("정산", 
-                     key=f'settle_button_{todo_id}',  # 고유 키
+                     key=f'settle_button_{todo_id}', 
                      on_click=settle_timer,
                      use_container_width=True)
 
     st.markdown("""
     <style>
     div[data-testid="column"] button {
-        padding: 2.5px 1.25px;  /* 좌우 5px -> 2.5px로 반으로 축소 */
-        font-size: 12px;        /* 폰트 크기 작게 */
-        height: 20px;           /* 높이 작게 */
-        width: 25%;             /* 너비 작게 */
-        min-width: 10px;        /* 최소 너비 작게 */
+        padding: 2.5px 1.25px;
+        font-size: 12px;
+        height: 20px;
+        width: 25%;
+        min-width: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
-
-
-
-
 
 def show_data_info(selected_data):
     with st.container(key=f'data_info_{selected_data["id"].iloc[0]}'):
@@ -274,7 +247,6 @@ def show_data_info(selected_data):
             f"<div style='line-height: 1.5;'><span style='color: white; font-size: 14px;'>{str(selected_data['start_date'].iloc[0]) + ' ~ ' + str(selected_data['start_date'].iloc[0])} </span>"
             f"<span style='color: gray; font-size: 14px;'>{'(연속 ' + str(selected_data['repeat_cycle'].iloc[0]) + '회 / ' + str(selected_data['repeat_cycle'].iloc[0]) + '일 간격)'} </span>"
             f"<span style='color: red; font-size: 24px;'>   {'D+' + str(selected_data['D_Day'].iloc[0]) if selected_data['D_Day'].iloc[0] > 0 else ('D' + str(selected_data['D_Day'].iloc[0]) if selected_data['D_Day'].iloc[0] < 0 else 'D-Day')}</span></div>", 
-
             unsafe_allow_html=True
         )
         st.markdown(
@@ -284,31 +256,24 @@ def show_data_info(selected_data):
             unsafe_allow_html=True
         )
 
-    
-    
-
+@st.fragment
 def show_selected_row(selected_data):
     show_data_info(selected_data)
     
-    # 현재 선택된 todo_id
     new_todo_id = selected_data['id'].iloc[0]
 
-    # 이전에 선택된 todo_id가 있고, 새로운 id와 다를 경우 이전 타이머 일시정지
     if 'current_todo_id' in st.session_state and st.session_state['current_todo_id'] != new_todo_id:
         old_todo_id = st.session_state['current_todo_id']
         if f'running_{old_todo_id}' in st.session_state and st.session_state[f'running_{old_todo_id}']:
-            # 이전 타이머가 실행 중이면 시간 업데이트 후 정지
             current_time = datetime.datetime.now()
             time_diff = current_time - st.session_state[f'timer_last_updated_{old_todo_id}']
             st.session_state[f'elapsed_time_{old_todo_id}'] += time_diff.seconds
             st.session_state[f'timer_last_updated_{old_todo_id}'] = current_time
             st.session_state[f'running_{old_todo_id}'] = False
 
-    # 현재 todo_id 업데이트
     st.session_state['current_todo_id'] = new_todo_id
     st.session_state.formState_selected_row = 'open'
     
-    # 'id'를 사용하여 타이머 호출
     todo_id = new_todo_id
     show_stopWatch(todo_id)
     
@@ -355,8 +320,8 @@ def show_selected_row(selected_data):
             print('닫기')
             print(st.session_state.show_selected_row)
             st.session_state.formState_selected_row = 'close'
-            return
 
+@st.fragment
 def show_list_todo(status):
     if status == '추가':
         df_filtered_todo = df_todo[df_todo['status'] == '미처리']
@@ -366,21 +331,21 @@ def show_list_todo(status):
     gb = GridOptionsBuilder.from_dataframe(df_filtered_todo[['title', 'D_Day']])
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(
-        domLayout='normal',  # 높이 고정용
+        domLayout='normal',
         rowSelection="single",
         suppressRowClickSelection=False,
         suppressAutoSize=True,
         suppressColumnVirtualisation=True,
         suppressMenu=True,
-        suppressHorizontalScroll=True  # 좌우 스크롤 비활성화
+        suppressHorizontalScroll=True
     )
     gb.configure_column(
         "title",
         headerName="Title",
-        width=360,  # 폭 고정
+        width=360,
         maxWidth=360,
         minWidth=360,
-        resizable=False,  # 크기 조정 불가
+        resizable=False,
         sortable=False,
         filter=False,
         suppressMovable=True,
@@ -390,10 +355,10 @@ def show_list_todo(status):
     gb.configure_column(
         "D_Day",
         headerName="D-Day",
-        width=100,  # 폭 고정
+        width=100,
         maxWidth=100,
         minWidth=100,
-        resizable=False,  # 크기 조정 불가
+        resizable=False,
         sortable=False,
         filter=False,
         suppressMovable=True,
@@ -401,26 +366,24 @@ def show_list_todo(status):
         suppressMenu=True
     )
 
-    # 8행 고정 높이 계산
-    row_height = 30  # 각 행의 높이
-    header_height = 40  # 헤더 높이
+    row_height = 30
+    header_height = 40
     fixed_rows = 8
-    grid_height = header_height + (row_height * fixed_rows)  # 약 280px
+    grid_height = header_height + (row_height * fixed_rows)
 
-    # 커스텀 CSS로 스크롤바 미세 조정
     custom_css = {
-        ".ag-root-wrapper": {"overflow-x": "hidden", "margin-bottom": "0px"},  # 좌우 스크롤 숨김
-        ".ag-body-horizontal-scroll": {"display": "none"},  # 가로 스크롤바 제거
+        ".ag-root-wrapper": {"overflow-x": "hidden", "margin-bottom": "0px"},
+        ".ag-body-horizontal-scroll": {"display": "none"},
     }
 
     grid_response = AgGrid(
         df_filtered_todo[['title', 'D_Day']],
         gridOptions=gb.build(),
-        update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.VALUE_CHANGED,
+        update_mode=GridUpdateMode.SELECTION_CHANGED,  # VALUE_CHANGED 제거
         allow_unsafe_jscode=True,
-        height=grid_height,  # 8행 고정 높이
-        custom_css=custom_css,  # 좌우 스크롤 제거용 CSS
-        fit_columns_on_grid_load=False,  # 컬럼 자동 맞춤 비활성화
+        height=grid_height,
+        custom_css=custom_css,
+        fit_columns_on_grid_load=False,
         key=f"aggrid_{status}"
     )
 
@@ -428,22 +391,15 @@ def show_list_todo(status):
         st.session_state.show_selected_row = True
         selected_title = grid_response['selected_rows'].iloc[0]['title']
         df_todo_selected = df_todo[df_todo['title'] == selected_title]
+        if not df_todo_selected.empty and status == '연습중':
+            show_selected_row(df_todo_selected.head(1))
     else:
-        df_todo_selected = pd.DataFrame()
-
-    if not df_todo_selected.empty and st.session_state.show_selected_row and status == '연습중':
-        show_selected_row(df_todo_selected.head(1))
+        st.session_state.show_selected_row = False
 
     return False
 
-
 with st.sidebar:
     st.header("추가, 편집")
-
-
-
-
-
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["연습중", "예정", "미처리", "/", "추가"])
 with tab1:
@@ -462,12 +418,9 @@ with tab4:
 with tab5:
     show_list_todo(status='추가')
 
-
 if st.session_state.formState_addToDo == 'close':
     if st.button('추가'):
         st.session_state.formState_addToDo = 'open'
         add_todo()
 else:
     add_todo()
-
-
