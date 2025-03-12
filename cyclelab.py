@@ -8,8 +8,8 @@ import datetime
 import threading
 import streamlit.components.v1 as components
 
-
-
+# Set the theme to night mode
+st.set_page_config(layout="wide", initial_sidebar_state="expanded", theme={"primaryColor": "#1f77b4", "backgroundColor": "#0e1117", "secondaryBackgroundColor": "#262730", "textColor": "#ffffff", "font": "sans serif"})
 
 # DB 연결 정보
 config_maindb = {
