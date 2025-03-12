@@ -198,7 +198,6 @@ def show_stopWatch(todo_id):  # todo_id 추가
         # st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
         return
 
-        
 
     if st.session_state[f'running_{todo_id}']:
         update_elapsed_time()
@@ -233,36 +232,66 @@ def show_stopWatch(todo_id):  # todo_id 추가
     """
     components.html(timer_html, height=60)
 
-
-    st.button("정지" if st.session_state[f'running_{todo_id}'] else "시작", 
-             key=f'toggle_button_{todo_id}',  # 고유 키
-             on_click=toggle_timer,
-             use_container_width=True)
-
-    st.button("리셋", 
-             key=f'reset_button_{todo_id}',  # 고유 키
-             on_click=reset_timer,
-             use_container_width=True)
-
-    st.button("정산", 
-             key=f'settle_button_{todo_id}',  # 고유 키
-             on_click=settle_timer,
-             use_container_width=True)
+    # 버튼을 하나의 컨테이너로 묶어 한 행에 표시
+    with st.container():
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.button("정지" if st.session_state[f'running_{todo_id}'] else "시작", 
+                     key=f'toggle_button_{todo_id}',  # 고유 키
+                     on_click=toggle_timer,
+                     use_container_width=True)
+        with col2:
+            st.button("리셋", 
+                     key=f'reset_button_{todo_id}',  # 고유 키
+                     on_click=reset_timer,
+                     use_container_width=True)
+        with col3:
+            st.button("정산", 
+                     key=f'settle_button_{todo_id}',  # 고유 키
+                     on_click=settle_timer,
+                     use_container_width=True)
 
     st.markdown("""
     <style>
     div[data-testid="column"] button {
-        padding: 5px 10px;
-        font-size: 14px;
-        height: 30px;
-        width: 100%;
+        padding: 2.5px 1.25px;  /* 좌우 5px -> 2.5px로 반으로 축소 */
+        font-size: 12px;        /* 폰트 크기 작게 */
+        height: 20px;           /* 높이 작게 */
+        width: 25%;             /* 너비 작게 */
+        min-width: 10px;        /* 최소 너비 작게 */
     }
     </style>
     """, unsafe_allow_html=True)
 
-def show_selected_row(selected_data):
-    st.write(selected_data['title'].iloc[0])
 
+
+
+def show_data_info(selected_data):
+    with st.container(key=f'data_info_{selected_data["id"].iloc[0]}'):
+        st.markdown(
+            f"<div style='line-height: 0.75;'><span style='color: yellow; font-size: 18px;'>{str(selected_data['title'].iloc[0])} </span>",
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            f"<div style='line-height: 1.5;'><span style='color: white; font-size: 14px;'>{str(selected_data['start_date'].iloc[0]) + ' ~ ' + str(selected_data['start_date'].iloc[0])} </span>"
+            f"<span style='color: gray; font-size: 14px;'>{'(연속 ' + str(selected_data['repeat_cycle'].iloc[0]) + '회 / ' + str(selected_data['repeat_cycle'].iloc[0]) + '일 간격)'} </span>"
+            f"<span style='color: red; font-size: 24px;'>   {'D+' + str(selected_data['D_Day'].iloc[0]) if selected_data['D_Day'].iloc[0] > 0 else ('D' + str(selected_data['D_Day'].iloc[0]) if selected_data['D_Day'].iloc[0] < 0 else 'D-Day')}</span></div>", 
+
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            f"<div style='line-height: 1.5;'><span style='color: white; font-size: 14px;'>{'누적: ' + str(selected_data['accumulated_time'].iloc[0]) + 'h'} </span>"
+            f"<span style='color: white; font-size: 14px;'>   {'완료: ' + str(selected_data['completion_count'].iloc[0]) + '회'} </span>"
+            f"<span style='color: white; font-size: 14px;'>   {'최근: ' + '3' + '일 전'} </span></div>",
+            unsafe_allow_html=True
+        )
+
+    
+    
+
+def show_selected_row(selected_data):
+    show_data_info(selected_data)
+    
     # 현재 선택된 todo_id
     new_todo_id = selected_data['id'].iloc[0]
 
