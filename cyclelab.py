@@ -38,12 +38,19 @@ if 'formState_editToDo' not in st.session_state:
 if 'formState_completeTodo' not in st.session_state:
     st.session_state.formState_completeTodo = 'close'
 
+
+
+
+
+
 options_genre = ['장르1', '장르2', '장르3']
 options_style1 = ['스타일1', '스타일2', '스타일3']
 options_style2 = ['스타일4', '스타일5', '스타일6']
 options_key1 = ['키1', '키2', '키3']
 options_key2 = ['키4', '키5', '키6']
 options_completion_level = ['Level_0', 'Level_1', 'Level_2', 'Level_3']
+
+
 
 # 데이터 로드 (테이블이 없으면 생성)
 def load_from_db():
@@ -81,6 +88,8 @@ def load_from_db():
 
 df_todo = load_from_db()
 
+
+
 def update_db_todo(new_data):
     global df_todo
     if df_todo.empty:
@@ -97,6 +106,9 @@ def update_db_todo(new_data):
     except Exception as e:
         st.error('데이터 저장 중 오류가 발생했습니다.')
         return False
+
+
+
 
 def add_todo():
     global df_todo
@@ -148,6 +160,13 @@ def add_todo():
                         'accumulated_time': [0],                                   #[자동] 연습 누적시간
                         'completion_count': [0],                                   #[자동] 연습 완료횟수
                         'stopWatch': [''],                                         #[자동] 진행 상태 시간 
+    
+                        # 'genre': [options_genre],                                 #장르
+                        # 'style1': [options_style1],                               #스타일1
+                        # 'style2': [options_style2],                               #스타일2
+                        # 'key1': [options_key1],                                   #키1
+                        # 'key2': [options_key2],                                   #키2
+
                     })
 
                     update_db_todo(new_todo)
@@ -159,6 +178,9 @@ def add_todo():
                 st.session_state.formState_addToDo = 'close'
                 st.session_state.show_title_form = False
                 st.rerun()
+
+
+
 
 @st.fragment
 def show_stopWatch(todo_id):
@@ -173,6 +195,7 @@ def show_stopWatch(todo_id):
     if f'timer_last_updated_{todo_id}' not in st.session_state:
         st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
     
+
     def update_elapsed_time():
         if st.session_state[f'running_{todo_id}']:
             current_time = datetime.datetime.now()
@@ -187,12 +210,14 @@ def show_stopWatch(todo_id):
         else:
             st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
             st.session_state[f'running_{todo_id}'] = True
-            st.rerun()  # 타이머 시작 시 즉시 리렌더링
 
     def reset_timer():
         st.session_state[f'elapsed_time_{todo_id}'] = 0
         st.session_state[f'running_{todo_id}'] = False
         st.session_state[f'timer_last_updated_{todo_id}'] = datetime.datetime.now()
+
+
+
 
     def complete_todo():
         update_elapsed_time()
@@ -206,17 +231,16 @@ def show_stopWatch(todo_id):
         update_db_todo(df_todo)
         reset_timer()
 
-    # 타이머 업데이트 (Python에서 관리)
+
     if st.session_state[f'running_{todo_id}']:
         update_elapsed_time()
-        time.sleep(1)  # 1초 대기
-        st.rerun()  # 프래그먼트 리렌더링으로 실시간 업데이트
 
     hours = st.session_state[f'elapsed_time_{todo_id}'] // 3600
     minutes = (st.session_state[f'elapsed_time_{todo_id}'] % 3600) // 60
     seconds = st.session_state[f'elapsed_time_{todo_id}'] % 60
     timer_display = f"{hours:02}:{minutes:02}:{seconds:02}"
 
+    
     # 색상 로직 수정: running 상태를 먼저 체크
     if st.session_state[f'running_{todo_id}']:
         timer_color = "#FF0000"  # 진행 중이면 항상 빨강
@@ -225,13 +249,31 @@ def show_stopWatch(todo_id):
     else:
         timer_color = "#FF8C00"  # 정지 상태이고 시간이 쌓였으면 주황
 
-    # HTML로 타이머 표시 (JavaScript 없이)
+
     timer_html = f"""
     <div id="timer_{todo_id}" style="font-size: 48px; font-weight: bold; color: {timer_color}; text-align: center;">
         {timer_display}
     </div>
+    <script>
+        let seconds = {st.session_state[f'elapsed_time_{todo_id}']};
+        let running = {'true' if st.session_state[f'running_{todo_id}'] else 'false'};
+        let timerElement = document.getElementById('timer_{todo_id}');
+        
+        function updateTimerDisplay() {{
+            if (running) {{
+                seconds++;
+                let h = Math.floor(seconds / 3600);
+                let m = Math.floor((seconds % 3600) / 60);
+                let s = seconds % 60;
+                timerElement.innerText = 
+                    `${{h.toString().padStart(2, '0')}}:${{m.toString().padStart(2, '0')}}:${{s.toString().padStart(2, '0')}}`;
+            }}
+        }}
+        let intervalId = setInterval(updateTimerDisplay, 1000);
+    </script>
     """
     components.html(timer_html, height=60)
+
 
     with st.container():
         col1, col2, col3 = st.columns(3)
@@ -262,6 +304,8 @@ def show_stopWatch(todo_id):
     }
     </style>
     """, unsafe_allow_html=True)
+
+
 
 def show_edit_form(selected_data):
     todo_id = selected_data["id"].iloc[0]
@@ -296,7 +340,7 @@ def show_edit_form(selected_data):
                             'id': [selected_data['id'].iloc[0]],
                             'title': [title_input],
                             'repeat_cycle': [selected_data['repeat_cycle'].iloc[0]],
-                            'continuous_count_perCycle': [selected_data['continuous_count_perCycle'].iloc[0]],
+                            'continuous_count_perCycle': [selected_data['continuous_count_perCycle'].iloc[0]], 
                             'start_date': [start_date_input], 
                             'completion_level': [selected_data['completion_level'].iloc[0]],
                             'status': [selected_data['status'].iloc[0]],
@@ -308,11 +352,15 @@ def show_edit_form(selected_data):
                             'accumulated_time': [accumulated_time_input], 
                             'completion_count': [completion_count_input],
                             'stopWatch': [selected_data['stopWatch'].iloc[0]],
+
                         })
         
+
                 update_db_todo(edited_todo)
             else:
                 st.error('곡명을 입력하세요')
+
+
 
 # 데이터 정보 표시 함수
 def show_data_info(selected_data):
@@ -328,6 +376,8 @@ def show_data_info(selected_data):
         f"<span style='color: white; font-size: 14px;'>   {'최근: ' + '3' + '일 전'} </span></div>",
         unsafe_allow_html=True
     )
+
+
 
 # 선택된 행 표시 함수
 @st.fragment
@@ -359,6 +409,11 @@ def show_selected_row(selected_data):
             show_data_info(selected_data)
             st.markdown("<hr>", unsafe_allow_html=True)
             show_stopWatch(selected_data['id'].iloc[0])
+
+
+
+
+
 
 @st.fragment
 def show_list_todo(status, key):
@@ -437,12 +492,18 @@ def show_list_todo(status, key):
 
     return False
 
+
+
+
+
 with st.sidebar:
     if st.button('곡 추가'):
         st.session_state.formState_addToDo = 'open'
         add_todo()
     else:
         add_todo()
+    
+
 
 def show_main_form(status):
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["연습중", "예정", "미처리", "/", "추가"])
@@ -462,9 +523,12 @@ def show_main_form(status):
     with tab5:
         show_list_todo(status='추가', key='aggrid_추가')
 
+
+
 # Streamlit 앱
 def main_app():
     show_main_form(status='연습중')
+
 
 # 앱 실행
 main_app()
