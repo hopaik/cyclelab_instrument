@@ -58,11 +58,6 @@ st.markdown("""
 
 
 
-options_genre = ['장르1', '장르2', '장르3']
-options_style1 = ['스타일1', '스타일2', '스타일3']
-options_style2 = ['스타일4', '스타일5', '스타일6']
-options_key1 = ['키1', '키2', '키3']
-options_key2 = ['키4', '키5', '키6']
 options_completion_level = ['Level_1', 'Level_2', 'Level_3']
 
 
@@ -696,7 +691,7 @@ if 'grid_keys' not in st.session_state:
     st.session_state.grid_keys = {}
 
 @st.fragment
-def show_list_todo(tab, level, key):
+def show_list_todo(tab, key):
     global today_local
 
     # 해당 key에 대한 grid_key가 없으면 초기화
@@ -852,31 +847,31 @@ def show_main_form(status):
     global today_local
     today_local = get_today_local()
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(["TODAY", "연습중", "/", "예정", "보류", '미처리', '   /   ', 'level_1', 'level_2', 'level_3'])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(["TODAY", "연습중", "/", "예정", "보류", '미처리', '  /  ', 'lv.1', 'lv.2', 'lv.3'])
     with tab1:
-        show_list_todo(tab='TODAY', level='all', key='status_TODAY')
+        show_list_todo(tab='TODAY', key='status_TODAY')
 
     with tab2:
-        show_list_todo(tab='연습중', level='all', key='status_연습중')
+        show_list_todo(tab='연습중', key='status_연습중')
 
     with tab4:
         # st.session_state.show_selected_row = False
-        show_list_todo(tab='예정', level='all', key='status_예정')
+        show_list_todo(tab='예정', key='status_예정')
 
     with tab5:
-        show_list_todo(tab='보류', level='all', key='status_보류')
+        show_list_todo(tab='보류', key='status_보류')
     
     with tab6:
-        show_list_todo(tab='미처리', level='all', key='status_미처리')
+        show_list_todo(tab='미처리', key='status_미처리')
 
     with tab8:
-        show_list_todo(tab='level_1', level='all', key='level_level1')
+        show_list_todo(tab='level_1', key='level_level1')
 
     with tab9:
-        show_list_todo(tab='level_2', level='all', key='level_level2')
+        show_list_todo(tab='level_2', key='level_level2')
 
     with tab10:
-        show_list_todo(tab='level_3', level='all', key='level_level3')
+        show_list_todo(tab='level_3', key='level_level3')
 
     
     # tab3, tab7 클릭을 비활성화
