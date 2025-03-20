@@ -86,7 +86,8 @@ def get_today_local():
 def load_from_db():
     def get_dataframe_from_db(table_name, columns, create_table_sql):
         try:
-            return pd.read_sql(f'SELECT * FROM {table_name}', con=engine_mainDB)
+            df = pd.read_sql(f'SELECT * FROM {table_name}', con=engine_mainDB)
+            return df.where(pd.notnull(df), None)  # nan을 None으로 변환
         except Exception as e:
             with engine_mainDB.connect() as connection:
                 connection.execute(text(create_table_sql))
@@ -114,9 +115,9 @@ def load_from_db():
         CREATE TABLE IF NOT EXISTS todo (
             id INT AUTO_INCREMENT PRIMARY KEY,
             title VARCHAR(255),
-            start_date_local INT,
-            last_completion_date_local INT,
-            due_date_local INT,
+            start_date_local DATE,
+            last_completion_date_local DATE,
+            due_date_local DATE,    
             remaining_days INT,
             d_day VARCHAR(255),
             repeat_cycle INT,
@@ -133,6 +134,8 @@ def load_from_db():
 
 
 df_todo = load_from_db()
+
+
 today_local = get_today_local()
 
 
@@ -288,7 +291,7 @@ def show_stopWatch(todo_id):
         global df_todo
         global today_local
         elapsed_sec = st.session_state[f'elapsed_time_{todo_id}']
-        if elapsed_sec >= 60:
+        if elapsed_sec >= 300:
             last_completion_date_local = today_local
             repeat_cycle = int(df_todo.loc[df_todo['id'] == todo_id, 'repeat_cycle'].astype(int).values[0])
             due_date_local = last_completion_date_local + pd.Timedelta(days=repeat_cycle)
@@ -300,10 +303,10 @@ def show_stopWatch(todo_id):
                 elif remaining_days < 0:
                     d_day = f"+{remaining_days * -1}"
 
-            elapsed_min = round(elapsed_sec / 60, 1)
+            elapsed_min = (elapsed_sec // 300) * 5
             df_todo.loc[df_todo['id'] == todo_id, 'accumulated_min'] = (df_todo.loc[df_todo['id'] == todo_id, 'accumulated_min'].astype(int) + elapsed_min).astype(int)
             df_todo.loc[df_todo['id'] == todo_id, 'completion_count'] += 1
-            df_todo.loc[df_todo['id'] == todo_id, 'days_elapsed'] = 0
+            # df_todo.loc[df_todo['id'] == todo_id, 'days_elapsed'] = 0
             df_todo.loc[df_todo['id'] == todo_id, 'last_completion_date_local'] = last_completion_date_local
             df_todo.loc[df_todo['id'] == todo_id, 'due_date_local'] = due_date_local
             df_todo.loc[df_todo['id'] == todo_id, 'remaining_days'] = remaining_days
@@ -311,30 +314,32 @@ def show_stopWatch(todo_id):
             st.session_state[f'settle_time_{todo_id}'] = False
             st.session_state[f'completed_todo_{todo_id}'] = True
 
+            
+            print(df_todo.loc[df_todo['id'] == todo_id])
+            print(df_todo)
+
             update_db_todo(df_todo)
 
         else:
-            st.error('취소되었습니다. (최소 1분 이상이어야 정산 가능합니다.)')
+            st.error('취소되었습니다. (최소 5분 이상이어야 정산 가능합니다.)')
             st.write("")
             st.write("")
             st.write("")
             st.write("")
-            time.sleep(3)
+            time.sleep(2)
             st.session_state[f'settle_time_{todo_id}'] = False
         st.rerun()
 
 
-
-
     def show_adjust_and_confirm(todo_id):
-        if st.button("위의 시간으로 정산 완료 할까요? (1분 미만 시 취소)", key=f"confirm_time_{todo_id}", use_container_width=True):
+        if st.button("위의 시간으로 정산 완료 할까요? (5분 미만 시 취소)", key=f"confirm_time_{todo_id}", use_container_width=True):
             confirm_completed_todo(todo_id)
         if st.button("+증가", key=f"increase_time_{todo_id}", use_container_width=True):
-            st.session_state[f'elapsed_time_{todo_id}'] += 60  # 1분 증가
+            st.session_state[f'elapsed_time_{todo_id}'] += 300  # 5분 증가
             st.rerun()
         if st.button("-감소", key=f"decrease_time_{todo_id}", use_container_width=True):
-            if st.session_state[f'elapsed_time_{todo_id}'] >= 60:
-                st.session_state[f'elapsed_time_{todo_id}'] -= 60  # 1분 감소
+            if st.session_state[f'elapsed_time_{todo_id}'] >= 300:
+                st.session_state[f'elapsed_time_{todo_id}'] -= 300  # 5분 감소
                 st.rerun()
 
 
@@ -426,6 +431,7 @@ def show_stopWatch(todo_id):
 
 def show_edit_form(selected_data, tab, key):
     global df_todo
+    selected_data = selected_data.where(pd.notnull(selected_data), None)
     today_local = get_today_local()
     todo_id = selected_data["id"].iloc[0]
     start_date_local = selected_data['start_date_local'].iloc[0]
@@ -434,6 +440,9 @@ def show_edit_form(selected_data, tab, key):
     remaining_days = selected_data['remaining_days'].iloc[0]
     d_day = selected_data['d_day'].iloc[0]
     completion_level = selected_data['completion_level'].iloc[0]
+    accumulated_min = selected_data['accumulated_min'].iloc[0]
+    completion_count = selected_data['completion_count'].iloc[0]
+
 
     if st.session_state.formState_editToDo == 'open':
         # 곡명 입력
@@ -473,9 +482,7 @@ def show_edit_form(selected_data, tab, key):
         
 
         # 시작일 입력
-        min_start_date = min(start_date_local if start_date_local is not None else today_local, today_local)  # start_date_local이 None이면 today_local, start_date_local이 today_local보다 이전일 수 있으므로
-        start_date_input = st.date_input(label='시작일', value=start_date_local, 
-                      min_value=min_start_date, key=f'edit_start_date_{key}', disabled=False)
+        start_date_input = st.date_input(label='시작일', value=start_date_local, key=f'edit_start_date_{key}', disabled=True)
         
         if start_date_input is None:
             st.error('시작일을 입력하세요')
@@ -483,10 +490,12 @@ def show_edit_form(selected_data, tab, key):
         
         # 남은 일수 계산
         due_date_calculated = start_date_input
-        last_completion_date_input = last_completion_date_local
-        if last_completion_date_input is not None:
-            due_date_calculated = last_completion_date_input + pd.Timedelta(days=repeat_cycle_input)
-        remaining_days = (due_date_calculated - today_local).days
+        if last_completion_date_local is not None:
+            due_date_calculated = last_completion_date_local + pd.Timedelta(days=repeat_cycle_input)
+        if pd.notna(due_date_calculated) and pd.notna(today_local):
+            remaining_days = (due_date_calculated - today_local).days
+        else:
+            remaining_days = None
         d_day = remaining_days
         if remaining_days is not None:
             if remaining_days > 0:
@@ -494,75 +503,81 @@ def show_edit_form(selected_data, tab, key):
             elif remaining_days < 0:
                 d_day = f"+{remaining_days * -1}"
         
+        
         if tab == 'TODAY' or tab == '연습중':
-            due_date_input = st.date_input(label='다음 예정일', value=due_date, 
-                          min_value=max(start_date_input, today_local), key=f'edit_due_date_{key}')
-            due_date = due_date_input
+            due_date_input = st.date_input(label='예정일 새로 지정', value=due_date_local, 
+                          min_value=due_date_local, key=f'edit_due_date_{key}')
+            due_date_local = due_date_input
         else:
-            due_date = start_date_input
+            due_date_local = start_date_input
+
+        if due_date_local is not None:
+            remaining_days = (due_date_local - today_local).days
+        else:
+            remaining_days = None
         
         remaining_days_input = st.number_input(label='남은 일수', value=remaining_days, key=f'edit_remaining_days_{key}', disabled=True)
         
+
         st.markdown("---")
-        if tab == 'TODAY' or tab == '연습중':
+        # if (tab == 'TODAY' or tab == '연습중') and (start_date_input <= today_local):
+        if (tab == 'TODAY' or tab == '연습중'):
             st.markdown("<h3 style='text-align: center; color: red;'>기록 변경</h3>", unsafe_allow_html=True)
             if start_date_input > today_local:
                 last_completion_date_input = None
                 last_completion_date_disabled = True
             else:
                 last_completion_date_disabled = False
-            last_completion_date_input = st.date_input(label='최근 완료일', value=last_completion_date_local, 
-                key=f'edit_last_completion_date_{key}', help='최근 완료일을', disabled=True)
-            if last_completion_date_local is not None:
-                completion_count_input = st.number_input(
-                    label='완료 횟수', 
-                    value=int(selected_data['completion_count'].iloc[0]) if 'completion_count' in selected_data else 0, 
-                    min_value=0, 
-                    key=f'edit_completion_count_{key}', 
-                    disabled=True
-                )
-                accumulated_min_input = st.number_input(
-                    label='누적 (분)', 
-                    value=int(selected_data['accumulated_min'].iloc[0]) if 'accumulated_min' in selected_data else 0, 
-                    min_value=0, 
-                    key=f'edit_accumulated_min_{key}', 
-                    disabled=True
-                )
-                if start_date_input <= today_local:
-                    add_completion_date_input = st.date_input(
-                        label='완료일 추가', 
-                        value=None,
-                        min_value=start_date_input, 
-                        max_value=today_local, 
-                        key=f'edit_add_completion_date_{key}', 
-                        help='완료일을 추가 할 수 있습니다.', 
-                        disabled=last_completion_date_disabled
-                    )
-                    add_accumulated_min_input = st.number_input(
-                        label='누적 (분)', 
-                        value=1, 
-                        min_value=1, 
-                        key=f'edit_add_accumulated_min_{key}', 
-                        disabled=add_completion_date_input is None
-                    )
-                else:
-                    add_completion_date_input = None
-                    add_accumulated_min_input = 0
-                if last_completion_date_local is None:
-                    due_date_local = max(due_date, start_date_local + pd.Timedelta(days=repeat_cycle_input))
-                else:
-                    due_date_local = max(due_date, last_completion_date_local + pd.Timedelta(days=repeat_cycle_input))
-            else:
-                accumulated_min_input = 0
-                completion_count_input = 0
-        add_completion_date_input = None
-        add_accumulated_min_input = 0
-        if add_completion_date_input is not None:
-            accumulated_min_input += add_accumulated_min_input
-            completion_count_input += 1
-            accumulated_min_input += add_accumulated_min_input
 
+            last_completion_date_input = st.date_input(label='최근 완료일', value=last_completion_date_local,
+                key=f'edit_last_completion_date_{key}', help='최근 완료일', disabled=True)
+            
+            completion_count_input = st.number_input(
+                label='완료 횟수', 
+                value=int(selected_data['completion_count'].iloc[0]) if 'completion_count' in selected_data else 0, 
+                min_value=0, 
+                key=f'edit_completion_count_{key}', 
+                disabled=True
+            )
+            accumulated_min_input = st.number_input(
+                label='누적 (분)', 
+                value=int(selected_data['accumulated_min'].iloc[0]) if 'accumulated_min' in selected_data else 0, 
+                min_value=0, 
+                step=5,
+                key=f'edit_accumulated_min_{key}', 
+                disabled=True
+            )
+            if start_date_input <= today_local:
+                add_completion_date_input = st.date_input(
+                    label='완료일 추가', 
+                    value=None,
+                    min_value=start_date_input, 
+                    max_value=today_local, 
+                    key=f'edit_add_completion_date_{key}', 
+                    help='완료일을 추가 할 수 있습니다.', 
+                    disabled=last_completion_date_disabled
+                )
+                add_accumulated_min_input = st.number_input(
+                    label='누적 (분)', 
+                    value=5, 
+                    min_value=5, 
+                    step=5,
+                    key=f'edit_add_accumulated_min_{key}', 
+                    disabled=add_completion_date_input is None
+                )
+                if add_completion_date_input is not None:
+                    accumulated_min_input += add_accumulated_min_input
+                    completion_count_input += 1
+
+                    if last_completion_date_local is not None:
+                        last_completion_date_local = max(pd.to_datetime(last_completion_date_local).date(), pd.to_datetime(add_completion_date_input).date())
+                    else:
+                        last_completion_date_local = pd.to_datetime(add_completion_date_input).date()
         
+      
+
+            
+            
         if st.button('저장', key=f'edit_save_{key}'):
             if title_input != "":
                 status = '연습중' if remaining_days > 0 else 'TODAY'
@@ -591,6 +606,7 @@ def show_edit_form(selected_data, tab, key):
     elif tab == '연습중':
         pass
 
+
 # 데이터 정보 표시 함수
 def show_data_info(selected_data):
     global today_local
@@ -599,7 +615,7 @@ def show_data_info(selected_data):
     due_date_local = selected_data['due_date_local'].iloc[0] 
     remaining_days = selected_data['remaining_days'].iloc[0] 
     d_day = selected_data['d_day'].iloc[0]
-    last_before_days = (today_local - pd.to_datetime(last_completion_date_local)).days if pd.notna(last_completion_date_local) else None
+    last_before_days = (today_local - last_completion_date_local).days if pd.notna(last_completion_date_local) else None
 
     accumulated_hour = round(selected_data['accumulated_min'].iloc[0] / 60, 1)
     if start_date_local is not None:
@@ -815,7 +831,7 @@ def show_list_todo(tab, key):
 
     d_day = remaining_days
     if remaining_days is not None:
-        d_day = remaining_days.apply(lambda x: f"{x * -1}" if x > 0 else (f"+{x * -1}" if x < 0 else x))
+        d_day = remaining_days.apply(lambda x: f"{x * -1}" if x is not None and x > 0 else (f"+{x * -1}" if x is not None and x < 0 else x))
     df_key[key]['d_day'] = d_day.astype(str)  # D-Day 컬럼을 문자열로 변환
 
 
@@ -952,21 +968,22 @@ def show_list_todo(tab, key):
 
 
 
-def update_d_day():
-    global df_todo
-    global today_local
-    today_local = get_today_local()
-    df_todo['remaining_days'] = (df_todo['due_date_local'] - today_local).apply(lambda x: x.days if pd.notna(x) else None)
-    df_todo['d_day'] = df_todo['remaining_days'].apply(lambda x: f"{x * -1}" if x > 0 else (f"+{x * -1}" if x < 0 else x)).astype(str)  # D-Day 컬럼을 문자열로 변환
-    df_todo['status'] = df_todo['remaining_days'].apply(lambda x: 'TODAY' if x <= 0 else '연습중')
-    update_db_todo(df_todo)
+# def update_d_day():
+#     global df_todo
+#     global today_local
+#     today_local = get_today_local()
+#     df_todo['remaining_days'] = (df_todo['due_date_local'] - today_local).apply(lambda x: x.days if pd.notna(x) else None)
+#     df_todo['d_day'] = df_todo['remaining_days'].apply(lambda x: f"{x * -1}" if x is not None and x > 0 else (f"+{x * -1}" if x is not None and x < 0 else x)).astype(str)  # D-Day 컬럼을 문자열로 변환
+#     df_todo['status'] = df_todo['remaining_days'].apply(lambda x: 'TODAY' if x is not None and x <= 0 else '연습중')
+#     update_db_todo(df_todo)
+#     print(today_local)
 
 
 
 
 @st.fragment(run_every=60)
 def show_main_form(status):
-    update_d_day()
+    # update_d_day()
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(["TODAY", "연습중", "보류", "/", "예정", '미처리', '  /  ', 'lv.1', 'lv.2', 'lv.3'])
     with tab1:
         show_list_todo(tab='TODAY', key='status_TODAY')
