@@ -43,7 +43,7 @@ if 'form_input_startDate' not in st.session_state:
 st.markdown("""
 <style>
     /* 상단 공백 최소화 */
-    div.block-container { padding-top: 0rem; margin-top: 0rem; }
+    div.block-container { padding-top: 0rem; margin-top: 1rem; }
     div[data-testid="stAppViewContainer"] { padding-top: 0rem; }
     div[data-testid="stTabs"] { margin-top: -1rem; }
     /* Deploy 버튼 숨기기 */
@@ -101,8 +101,6 @@ def load_from_db():
             'start_date_local', 
             'last_completion_date_local', 
             'due_date_local', 
-            'remaining_days',
-            'd_day',
             'repeat_cycle', 
             'continuous_count_perCycle', 
             'practiceTime_min',
@@ -117,9 +115,7 @@ def load_from_db():
             title VARCHAR(255),
             start_date_local DATE,
             last_completion_date_local DATE,
-            due_date_local DATE,    
-            remaining_days INT,
-            d_day VARCHAR(255),
+            due_date_local DATE,  
             repeat_cycle INT,
             continuous_count_perCycle INT,
             practiceTime_min INT,
@@ -163,55 +159,87 @@ def update_db_todo(df_new_todo):
     
 
 
+
+        
+def check_same_title(title_input):
+    if title_input in df_todo['title'].values:
+        st.warning('이미 존재하는 곡명입니다.')
+        st.write(title_input)
+        return True
+    return False
+
+
+def save_add_todo(title_input, completion_level):
+    global df_todo
+    st.session_state.formState_addToDo = 'close'
+    st.session_state.show_title_form = False
+
+    if df_todo.empty:
+        new_id = 1
+    else:
+        new_id = df_todo['id'].max() + 1
+
+    df_new_todo = pd.DataFrame({
+        'id': [new_id],
+        'title': [title_input],
+        'start_date_local': [None],
+        'last_completion_date_local': [None],
+        'due_date_local': [None],
+        'repeat_cycle': [1],
+        'continuous_count_perCycle': [1],
+        'practiceTime_min': [5],
+        'accumulated_min': [0],
+        'completion_count': [0],
+        'status': ['미처리'],
+        'completion_level': [completion_level],
+    })
+
+    update_db_todo(df_new_todo)
+    st.success('저장되었습니다')
+    df_todo = load_from_db()
+
+    time.sleep(1)
+    st.rerun()
+
 def add_todo():
     global df_todo
     global today_local
     today_local = get_today_local()
     
-    
     if st.session_state.formState_addToDo == 'open':
         title_input = st.text_input('곡명', value="", key='title_input', help='곡명을 입력하세요')
         completion_level = st.selectbox('완료 레벨', options=options_completion_level, index=0, key='completion_level', help='완료 레벨을 선택하세요')
-        # status_input = st.selectbox('상태', options=['미처리', '예정'], index=0, key='status_input', help='상태를 선택하세요')
         
-        if st.button('저장'):
-            if title_input != "":
-                st.session_state.formState_addToDo = 'close'
-                st.session_state.show_title_form = False
-
-                if df_todo.empty:
-                    new_id = 1
-                else:
-                    new_id = df_todo['id'].max() + 1
-
-                df_new_todo = pd.DataFrame({
-                    'id': [new_id],
-                    'title': [title_input],
-                    'start_date_local': [None],
-                    'last_completion_date_local': [None],
-                    'due_date_local': [None],
-                    'remaining_days': [None],
-                    'd_day': [None],
-                    'repeat_cycle': [1],
-                    'continuous_count_perCycle': [1],
-                    'practiceTime_min': [5],
-                    'accumulated_min': [0],
-                    'completion_count': [0],
-                    'status': ['미처리'],
-                    'completion_level': [completion_level],
-                })
-
-                update_db_todo(df_new_todo)
-                st.success('저장되었습니다')
-                st.rerun()
-            else:
+        # "저장" 버튼 처리
+        if st.button('저장', key='save_button'):
+            if title_input == "":
                 st.error('곡명을 입력하세요')
-
-        if st.button('취소'):
+            elif check_same_title(title_input):
+                pass  # 경고는 check_same_title에서 처리됨
+            else:
+                similar_titles = df_todo[df_todo['title'].str.contains(title_input, case=False, na=False)]
+                if not similar_titles.empty:
+                    st.session_state.show_proceed_button = True
+                    st.session_state.title_input_to_save = title_input
+                    st.session_state.completion_level_to_save = completion_level
+                    st.session_state.similar_titles = similar_titles
+                else:
+                    save_add_todo(title_input, completion_level)
+        
+        # "진행" 버튼 처리 (독립적으로 실행)
+        if st.session_state.get('show_proceed_button', False):
+            st.warning('비슷한 이름의 곡이 이미 존재합니다. 그대로 진행 하시겠습니까?')
+            st.write(st.session_state.similar_titles['title'])
+            if st.button('진행', key='proceed_button'):
+                save_add_todo(st.session_state.title_input_to_save, st.session_state.completion_level_to_save)
+                st.session_state.show_proceed_button = False
+        
+        # "취소" 버튼 처리
+        if st.button('취소', key='cancel_button'):
             st.session_state.formState_addToDo = 'close'
             st.session_state.show_title_form = False
+            st.session_state.show_proceed_button = False
             st.rerun()
-
 
 
 
@@ -220,127 +248,113 @@ def add_todo():
 def show_stopWatch(todo_id):
     global df_todo
     
-    if f'start_time_{todo_id}' not in st.session_state:
-        st.session_state[f'start_time_{todo_id}'] = datetime.now()
+    # 세션 상태 초기화
     if f'running_{todo_id}' not in st.session_state:
         st.session_state[f'running_{todo_id}'] = False
     if f'elapsed_time_{todo_id}' not in st.session_state:
         st.session_state[f'elapsed_time_{todo_id}'] = 0
-    if f'timer_last_updated_{todo_id}' not in st.session_state:
-        st.session_state[f'timer_last_updated_{todo_id}'] = datetime.now()
     if f'settle_time_{todo_id}' not in st.session_state:
         st.session_state[f'settle_time_{todo_id}'] = False
     if f'completed_todo_{todo_id}' not in st.session_state:
         st.session_state[f'completed_todo_{todo_id}'] = False
 
-    if f'editing_todo_{todo_id}' not in st.session_state:
-        st.session_state[f'editing_todo_{todo_id}'] = False
+    # 타이머 스레드 함수
+    def timer_thread():
+        while st.session_state[f'running_{todo_id}']:
+            time.sleep(1)
+            st.session_state[f'elapsed_time_{todo_id}'] += 1
+            # 5초마다 UI 갱신 (성능 최적화를 위해 빈도 조절)
+            if st.session_state[f'elapsed_time_{todo_id}'] % 5 == 0:
+                st.rerun()
 
-    def update_elapsed_time():
-        if st.session_state[f'running_{todo_id}']:
-            current_time = datetime.now()
-            time_diff = current_time - st.session_state[f'timer_last_updated_{todo_id}']
-            st.session_state[f'elapsed_time_{todo_id}'] += time_diff.seconds
-            st.session_state[f'timer_last_updated_{todo_id}'] = current_time
+    # 타이머 시작
+    def start_timer():
+        if not st.session_state[f'running_{todo_id}']:
+            st.session_state[f'running_{todo_id}'] = True
+            threading.Thread(target=timer_thread, daemon=True).start()
 
+    # 타이머 일시정지
     def pause_timer():
-        update_elapsed_time()
         st.session_state[f'running_{todo_id}'] = False
 
-    def resume_timer():
-        st.session_state[f'timer_last_updated_{todo_id}'] = datetime.now()
-        st.session_state[f'running_{todo_id}'] = True
-
-    def toggle_timer():
-        if st.session_state[f'running_{todo_id}']:
-            pause_timer()
-        else:
-            resume_timer()
-
+    # 타이머 리셋
     def reset_timer():
         st.session_state[f'elapsed_time_{todo_id}'] = 0
         st.session_state[f'running_{todo_id}'] = False
-        st.session_state[f'timer_last_updated_{todo_id}'] = datetime.now()
 
+    # 타이머 정산
     def settle_timer():
-        pause_timer()
-        # elapsed_time = st.session_state[f'elapsed_time_{todo_id}']
-        # hours = elapsed_time // 3600
-        # minutes = (elapsed_time % 3600) // 60
-        # seconds = elapsed_time % 60
-        # stopWatch = f"{hours:02}:{minutes:02}:{seconds:02}"
+        st.session_state[f'running_{todo_id}'] = False
         st.session_state[f'settle_time_{todo_id}'] = True
 
-
-
-    def show_completed_todo(todo_id):
-        st.write("<div style='text-align: center;'>정산 완료!!! 🎉</div>", unsafe_allow_html=True)
-        st.write("")
-        st.write("")
-        st.write("")
-        st.write("")
-        time.sleep(3) #!!!광고 타임
-        st.session_state[f'settle_time_{todo_id}'] = False
-        st.session_state[f'completed_todo_{todo_id}'] = False
-        reset_timer()
-        st.rerun()
+    # 타이머 표시
+    def show_timer_display():
+        hours = st.session_state[f'elapsed_time_{todo_id}'] // 3600
+        minutes = (st.session_state[f'elapsed_time_{todo_id}'] % 3600) // 60
+        seconds = st.session_state[f'elapsed_time_{todo_id}'] % 60
+        timer_display = f"{hours:02}:{minutes:02}:{seconds:02}"
         
+        # 색상 설정
+        timer_color = "#FF0000" if st.session_state[f'running_{todo_id}'] else \
+                     "#808080" if st.session_state[f'elapsed_time_{todo_id}'] == 0 else "#FF8C00"
+        
+        st.markdown(
+            f"<div style='font-size: 48px; font-weight: bold; color: {timer_color}; text-align: center;'>{timer_display}</div>",
+            unsafe_allow_html=True
+        )
 
-
-    def confirm_completed_todo(todo_id):
-        global df_todo
-        global today_local
+    # 정산 완료 처리
+    def confirm_completed_todo():
+        global df_todo, today_local
         elapsed_sec = st.session_state[f'elapsed_time_{todo_id}']
-        if elapsed_sec >= 300:
+        if elapsed_sec >= 300:  # 5분 이상
             last_completion_date_local = today_local
-            repeat_cycle = int(df_todo.loc[df_todo['id'] == todo_id, 'repeat_cycle'].astype(int).values[0])
+            repeat_cycle = int(df_todo.loc[df_todo['id'] == todo_id, 'repeat_cycle'].values[0])
             due_date_local = last_completion_date_local + pd.Timedelta(days=repeat_cycle)
-            remaining_days = (due_date_local - today_local).days
-            d_day = remaining_days
-            if remaining_days is not None:
-                if remaining_days > 0:
-                    d_day = f"{remaining_days * -1}"
-                elif remaining_days < 0:
-                    d_day = f"+{remaining_days * -1}"
-
             elapsed_min = (elapsed_sec // 300) * 5
-            df_todo.loc[df_todo['id'] == todo_id, 'accumulated_min'] = (df_todo.loc[df_todo['id'] == todo_id, 'accumulated_min'].astype(int) + elapsed_min).astype(int)
+            
+            df_todo.loc[df_todo['id'] == todo_id, 'accumulated_min'] += elapsed_min
             df_todo.loc[df_todo['id'] == todo_id, 'completion_count'] += 1
-            # df_todo.loc[df_todo['id'] == todo_id, 'days_elapsed'] = 0
             df_todo.loc[df_todo['id'] == todo_id, 'last_completion_date_local'] = last_completion_date_local
             df_todo.loc[df_todo['id'] == todo_id, 'due_date_local'] = due_date_local
-            df_todo.loc[df_todo['id'] == todo_id, 'remaining_days'] = remaining_days
-            df_todo.loc[df_todo['id'] == todo_id, 'd_day'] = d_day
+            update_db_todo(df_todo)
             st.session_state[f'settle_time_{todo_id}'] = False
             st.session_state[f'completed_todo_{todo_id}'] = True
-
-            
-            print(df_todo.loc[df_todo['id'] == todo_id])
-            print(df_todo)
-
-            update_db_todo(df_todo)
-
+            reset_timer()
         else:
-            st.error('취소되었습니다. (최소 5분 이상이어야 정산 가능합니다.)')
-            st.write("")
-            st.write("")
-            st.write("")
-            st.write("")
+            st.error('5분 미만은 정산할 수 없습니다.')
             time.sleep(2)
             st.session_state[f'settle_time_{todo_id}'] = False
         st.rerun()
 
-
-    def show_adjust_and_confirm(todo_id):
-        if st.button("위의 시간으로 정산 완료 할까요? (5분 미만 시 취소)", key=f"confirm_time_{todo_id}", use_container_width=True):
-            confirm_completed_todo(todo_id)
-        if st.button("+증가", key=f"increase_time_{todo_id}", use_container_width=True):
-            st.session_state[f'elapsed_time_{todo_id}'] += 300  # 5분 증가
-            st.rerun()
-        if st.button("-감소", key=f"decrease_time_{todo_id}", use_container_width=True):
-            if st.session_state[f'elapsed_time_{todo_id}'] >= 300:
-                st.session_state[f'elapsed_time_{todo_id}'] -= 300  # 5분 감소
+    # UI 렌더링
+    if st.session_state[f'completed_todo_{todo_id}']:
+        st.write("<div style='text-align: center;'>정산 완료!!! 🎉</div>", unsafe_allow_html=True)
+        time.sleep(3)
+        st.session_state[f'completed_todo_{todo_id}'] = False
+        st.rerun()
+    else:
+        show_timer_display()
+        if not st.session_state[f'settle_time_{todo_id}']:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.button("시작" if not st.session_state[f'running_{todo_id}'] else "정지",
+                         key=f'toggle_button_{todo_id}',
+                         on_click=start_timer if not st.session_state[f'running_{todo_id}'] else pause_timer)
+            with col2:
+                st.button("리셋", key=f'reset_button_{todo_id}', on_click=reset_timer)
+            with col3:
+                st.button("정산", key=f'settle_button_{todo_id}', on_click=settle_timer)
+        else:
+            if st.button("정산 완료", key=f"confirm_time_{todo_id}"):
+                confirm_completed_todo()
+            if st.button("+5분", key=f"increase_time_{todo_id}"):
+                st.session_state[f'elapsed_time_{todo_id}'] += 300
                 st.rerun()
+            if st.button("-5분", key=f"decrease_time_{todo_id}"):
+                if st.session_state[f'elapsed_time_{todo_id}'] >= 300:
+                    st.session_state[f'elapsed_time_{todo_id}'] -= 300
+                    st.rerun()
 
 
     def show_timer_display(todo_id):
@@ -487,27 +501,35 @@ def show_edit_form(selected_data, tab, key):
         if start_date_input is None:
             st.error('시작일을 입력하세요')
             return
+
+        last_completion_date_input = st.date_input(label='최근 완료일', value=last_completion_date_local,
+        key=f'edit_last_completion_date_{key}', help='최근 완료일', disabled=True)
+            
+        completion_count_input = st.number_input(
+            label='완료 횟수', 
+            value=int(selected_data['completion_count'].iloc[0]) if 'completion_count' in selected_data else 0, 
+            min_value=0, 
+            key=f'edit_completion_count_{key}', 
+            disabled=True
+        )
+        accumulated_min_input = st.number_input(
+            label='누적 (분)', 
+            value=int(selected_data['accumulated_min'].iloc[0]) if 'accumulated_min' in selected_data else 0, 
+            min_value=0, 
+            step=5,
+            key=f'edit_accumulated_min_{key}', 
+            disabled=True
+        )
         
-        # 남은 일수 계산
-        due_date_calculated = start_date_input
-        if last_completion_date_local is not None:
-            due_date_calculated = last_completion_date_local + pd.Timedelta(days=repeat_cycle_input)
-        if pd.notna(due_date_calculated) and pd.notna(today_local):
-            remaining_days = (due_date_calculated - today_local).days
-        else:
-            remaining_days = None
-        d_day = remaining_days
-        if remaining_days is not None:
-            if remaining_days > 0:
-                d_day = f"{remaining_days * -1}"
-            elif remaining_days < 0:
-                d_day = f"+{remaining_days * -1}"
         
         
         if tab == 'TODAY' or tab == '연습중':
-            due_date_input = st.date_input(label='예정일 새로 지정', value=due_date_local, 
-                          min_value=due_date_local, key=f'edit_due_date_{key}')
-            due_date_local = due_date_input
+            due_date_input = st.date_input(label='예정일 새로 지정', value=due_date_local, key=f'edit_due_date_{key}')
+            if due_date_input < today_local:
+                st.error('예정일은 오늘 날짜 이후여야 합니다.')
+                return
+            else:
+                due_date_local = due_date_input
         else:
             due_date_local = start_date_input
 
@@ -529,24 +551,26 @@ def show_edit_form(selected_data, tab, key):
             else:
                 last_completion_date_disabled = False
 
-            last_completion_date_input = st.date_input(label='최근 완료일', value=last_completion_date_local,
-                key=f'edit_last_completion_date_{key}', help='최근 완료일', disabled=True)
+            # last_completion_date_input = st.date_input(label='최근 완료일', value=last_completion_date_local,
+            #     key=f'edit_last_completion_date_{key}', help='최근 완료일', disabled=True)
             
-            completion_count_input = st.number_input(
-                label='완료 횟수', 
-                value=int(selected_data['completion_count'].iloc[0]) if 'completion_count' in selected_data else 0, 
-                min_value=0, 
-                key=f'edit_completion_count_{key}', 
-                disabled=True
-            )
-            accumulated_min_input = st.number_input(
-                label='누적 (분)', 
-                value=int(selected_data['accumulated_min'].iloc[0]) if 'accumulated_min' in selected_data else 0, 
-                min_value=0, 
-                step=5,
-                key=f'edit_accumulated_min_{key}', 
-                disabled=True
-            )
+            # completion_count_input = st.number_input(
+            #     label='완료 횟수', 
+            #     value=int(selected_data['completion_count'].iloc[0]) if 'completion_count' in selected_data else 0, 
+            #     min_value=0, 
+            #     key=f'edit_completion_count_{key}', 
+            #     disabled=True
+            # )
+            # accumulated_min_input = st.number_input(
+            #     label='누적 (분)', 
+            #     value=int(selected_data['accumulated_min'].iloc[0]) if 'accumulated_min' in selected_data else 0, 
+            #     min_value=0, 
+            #     step=5,
+            #     key=f'edit_accumulated_min_{key}', 
+            #     disabled=True
+            # )
+
+            
             if start_date_input <= today_local:
                 add_completion_date_input = st.date_input(
                     label='완료일 추가', 
@@ -574,9 +598,6 @@ def show_edit_form(selected_data, tab, key):
                     else:
                         last_completion_date_local = pd.to_datetime(add_completion_date_input).date()
         
-      
-
-            
             
         if st.button('저장', key=f'edit_save_{key}'):
             if title_input != "":
@@ -594,10 +615,9 @@ def show_edit_form(selected_data, tab, key):
                             'due_date_local': [due_date_local],
                             'completion_level': [completion_level],
                             'status': [status],
-                            'remaining_days': [remaining_days],
-                            'd_day': [d_day]
                         })
                 update_db_todo(df_edited_todo)
+                df_todo = load_from_db()
                 st.session_state.formState_editToDo = 'close'
                 st.rerun()
             else:
@@ -644,6 +664,11 @@ def add_to_practice(selected_data, key):
     repeat_cycle = selected_data['repeat_cycle'].iloc[0]
     continuous_count_perCycle = selected_data['continuous_count_perCycle'].iloc[0]
     last_completion_date_local = selected_data['last_completion_date_local'].iloc[0]
+    remaining_days = selected_data['remaining_days'].iloc[0]
+    d_day = selected_data['d_day'].iloc[0]
+
+
+    
     st.session_state.formState_editToDo = 'close'
     
     repeat_cycle_input = st.number_input(
@@ -678,13 +703,6 @@ def add_to_practice(selected_data, key):
 
     if start_date_input is not None:
         remaining_days = (start_date_input - today_local).days
-        d_day = remaining_days
-        if remaining_days is not None:
-            if remaining_days > 0:
-                d_day = f"{remaining_days * -1}"
-            elif remaining_days < 0:
-                d_day = f"+{remaining_days * -1}"
-            
         status = 'TODAY' if remaining_days <= 0 else '연습중'
         df_todo.loc[df_todo['id'] == selected_data['id'].iloc[0], 'status'] = status
         df_todo.loc[df_todo['id'] == selected_data['id'].iloc[0], 'start_date_local'] = start_date_input
@@ -698,9 +716,6 @@ def add_to_practice(selected_data, key):
         st.session_state.grid_keys[key] = f"grid_{key}_{int(time.time())}"
         st.session_state.form_input_startDate = 'close'
         st.rerun()
-    else:
-        st.error('시작일을 입력하세요')
-
 
 # 선택된 행 표시 함수
 @st.fragment
@@ -801,16 +816,15 @@ def show_selected_row(selected_data, tab, key):
 
 
 
-
-
-
-
 # grid_key를 각 key별로 고유하게 관리하기 위한 딕셔너리
 if 'grid_keys' not in st.session_state:
     st.session_state.grid_keys = {}
 @st.fragment
 def show_list_todo(tab, key):
     global today_local
+    global df_todo
+    d_day = df_todo['d_day']
+
 
     # 해당 key에 대한 grid_key가 없으면 초기화
     if key not in st.session_state.grid_keys:
@@ -829,11 +843,10 @@ def show_list_todo(tab, key):
     else:
         remaining_days = None
 
-    d_day = remaining_days
-    if remaining_days is not None:
-        d_day = remaining_days.apply(lambda x: f"{x * -1}" if x is not None and x > 0 else (f"+{x * -1}" if x is not None and x < 0 else x))
     df_key[key]['d_day'] = d_day.astype(str)  # D-Day 컬럼을 문자열로 변환
 
+
+    
 
     
 
@@ -857,7 +870,8 @@ def show_list_todo(tab, key):
         df_filtered_todo = df_filtered_todo[df_filtered_todo['completion_level'] == 'Level_3']
     elif key == 'all':
         df_filtered_todo = df_filtered_todo.copy()
-    
+
+
 
     # GridOptionsBuilder 설정
     gb = GridOptionsBuilder.from_dataframe(df_filtered_todo[['title', 'd_day']])
@@ -968,22 +982,21 @@ def show_list_todo(tab, key):
 
 
 
-# def update_d_day():
-#     global df_todo
-#     global today_local
-#     today_local = get_today_local()
-#     df_todo['remaining_days'] = (df_todo['due_date_local'] - today_local).apply(lambda x: x.days if pd.notna(x) else None)
-#     df_todo['d_day'] = df_todo['remaining_days'].apply(lambda x: f"{x * -1}" if x is not None and x > 0 else (f"+{x * -1}" if x is not None and x < 0 else x)).astype(str)  # D-Day 컬럼을 문자열로 변환
-#     df_todo['status'] = df_todo['remaining_days'].apply(lambda x: 'TODAY' if x is not None and x <= 0 else '연습중')
-#     update_db_todo(df_todo)
-#     print(today_local)
+def update_d_day():
+    global df_todo
+    global today_local
+    today_local = get_today_local()
+    df_todo = load_from_db()
+    df_todo['remaining_days'] = (df_todo['due_date_local'] - today_local).apply(lambda x: int(x.days) if pd.notna(x) else None)
+    df_todo['d_day'] = df_todo['remaining_days'].apply(lambda x: f"+{x * -1}" if x is not None and x < 0 else (f"{x * -1}" if x is not None and x > 0 else str(x)) if x is not None else "")  # D-Day 컬럼을 문자열로 변환
+    
+    df_todo = df_todo.where(pd.notnull(df_todo), None)
 
 
 
-
-@st.fragment(run_every=60)
+@st.fragment(run_every=3)
 def show_main_form(status):
-    # update_d_day()
+    update_d_day()
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(["TODAY", "연습중", "보류", "/", "예정", '미처리', '  /  ', 'lv.1', 'lv.2', 'lv.3'])
     with tab1:
         show_list_todo(tab='TODAY', key='status_TODAY')
@@ -1028,6 +1041,14 @@ with st.sidebar:
 
 
 def main_app():
+    # Keep-Alive 메커니즘 추가
+    components.html("""
+    <script>
+        setInterval(function() {
+            fetch(window.location.href);
+        }, 30000);  // 30초마다 Ping
+    </script>
+    """, height=0)
     show_main_form(status='TODAY')
 
 # # 앱 실행
