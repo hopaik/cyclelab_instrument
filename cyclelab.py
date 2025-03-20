@@ -243,118 +243,195 @@ def add_todo():
 
 
 
-
 @st.fragment
-def show_stopWatch(todo_id):
+def show_stopWatch(todo_id, tab):  # tab 매개변수 추가
     global df_todo
     
-    # 세션 상태 초기화
+    if f'start_time_{todo_id}' not in st.session_state:
+        st.session_state[f'start_time_{todo_id}'] = datetime.now()
     if f'running_{todo_id}' not in st.session_state:
         st.session_state[f'running_{todo_id}'] = False
     if f'elapsed_time_{todo_id}' not in st.session_state:
         st.session_state[f'elapsed_time_{todo_id}'] = 0
+    if f'timer_last_updated_{todo_id}' not in st.session_state:
+        st.session_state[f'timer_last_updated_{todo_id}'] = datetime.now()
     if f'settle_time_{todo_id}' not in st.session_state:
         st.session_state[f'settle_time_{todo_id}'] = False
     if f'completed_todo_{todo_id}' not in st.session_state:
         st.session_state[f'completed_todo_{todo_id}'] = False
 
-    # 타이머 스레드 함수
-    def timer_thread():
-        while st.session_state[f'running_{todo_id}']:
-            time.sleep(1)
-            st.session_state[f'elapsed_time_{todo_id}'] += 1
-            # 5초마다 UI 갱신 (성능 최적화를 위해 빈도 조절)
-            if st.session_state[f'elapsed_time_{todo_id}'] % 5 == 0:
-                st.rerun()
+    if f'editing_todo_{todo_id}' not in st.session_state:
+        st.session_state[f'editing_todo_{todo_id}'] = False
 
-    # 타이머 시작
-    def start_timer():
-        if not st.session_state[f'running_{todo_id}']:
-            st.session_state[f'running_{todo_id}'] = True
-            threading.Thread(target=timer_thread, daemon=True).start()
+    def update_elapsed_time():
+        if st.session_state[f'running_{todo_id}']:
+            current_time = datetime.now()
+            time_diff = current_time - st.session_state[f'timer_last_updated_{todo_id}']
+            st.session_state[f'elapsed_time_{todo_id}'] += time_diff.seconds
+            st.session_state[f'timer_last_updated_{todo_id}'] = current_time
 
-    # 타이머 일시정지
     def pause_timer():
+        update_elapsed_time()
         st.session_state[f'running_{todo_id}'] = False
 
-    # 타이머 리셋
+    def resume_timer():
+        st.session_state[f'timer_last_updated_{todo_id}'] = datetime.now()
+        st.session_state[f'running_{todo_id}'] = True
+
+    def toggle_timer():
+        if st.session_state[f'running_{todo_id}']:
+            pause_timer()
+        else:
+            resume_timer()
+
     def reset_timer():
         st.session_state[f'elapsed_time_{todo_id}'] = 0
         st.session_state[f'running_{todo_id}'] = False
+        st.session_state[f'timer_last_updated_{todo_id}'] = datetime.now()
 
-    # 타이머 정산
     def settle_timer():
-        st.session_state[f'running_{todo_id}'] = False
+        pause_timer()
+        # elapsed_time = st.session_state[f'elapsed_time_{todo_id}']
+        # hours = elapsed_time // 3600
+        # minutes = (elapsed_time % 3600) // 60
+        # seconds = elapsed_time % 60
+        # stopWatch = f"{hours:02}:{minutes:02}:{seconds:02}"
         st.session_state[f'settle_time_{todo_id}'] = True
 
-    # 타이머 표시
-    def show_timer_display():
-        hours = st.session_state[f'elapsed_time_{todo_id}'] // 3600
-        minutes = (st.session_state[f'elapsed_time_{todo_id}'] % 3600) // 60
-        seconds = st.session_state[f'elapsed_time_{todo_id}'] % 60
-        timer_display = f"{hours:02}:{minutes:02}:{seconds:02}"
-        
-        # 색상 설정
-        timer_color = "#FF0000" if st.session_state[f'running_{todo_id}'] else \
-                     "#808080" if st.session_state[f'elapsed_time_{todo_id}'] == 0 else "#FF8C00"
-        
-        st.markdown(
-            f"<div style='font-size: 48px; font-weight: bold; color: {timer_color}; text-align: center;'>{timer_display}</div>",
-            unsafe_allow_html=True
-        )
+    def show_completed_todo(todo_id):
+        st.write("<div style='text-align: center;'>정산 완료!!! 🎉</div>", unsafe_allow_html=True)
+        st.write("")
+        st.write("")
+        st.write("")
+        st.write("")
+        time.sleep(3) #!!!광고 타임
+        st.session_state[f'settle_time_{todo_id}'] = False
+        st.session_state[f'completed_todo_{todo_id}'] = False
+        reset_timer()
+        st.rerun()
 
-    # 정산 완료 처리
-    def confirm_completed_todo():
-        global df_todo, today_local
+    def confirm_completed_todo(todo_id):
+        global df_todo
+        global today_local
         elapsed_sec = st.session_state[f'elapsed_time_{todo_id}']
-        if elapsed_sec >= 300:  # 5분 이상
+        if elapsed_sec >= 300:
             last_completion_date_local = today_local
-            repeat_cycle = int(df_todo.loc[df_todo['id'] == todo_id, 'repeat_cycle'].values[0])
+            repeat_cycle = int(df_todo.loc[df_todo['id'] == todo_id, 'repeat_cycle'].astype(int).values[0])
             due_date_local = last_completion_date_local + pd.Timedelta(days=repeat_cycle)
+
             elapsed_min = (elapsed_sec // 300) * 5
-            
-            df_todo.loc[df_todo['id'] == todo_id, 'accumulated_min'] += elapsed_min
+            df_todo.loc[df_todo['id'] == todo_id, 'accumulated_min'] = (df_todo.loc[df_todo['id'] == todo_id, 'accumulated_min'].astype(int) + elapsed_min).astype(int)
             df_todo.loc[df_todo['id'] == todo_id, 'completion_count'] += 1
+            # df_todo.loc[df_todo['id'] == todo_id, 'days_elapsed'] = 0
             df_todo.loc[df_todo['id'] == todo_id, 'last_completion_date_local'] = last_completion_date_local
             df_todo.loc[df_todo['id'] == todo_id, 'due_date_local'] = due_date_local
-            update_db_todo(df_todo)
             st.session_state[f'settle_time_{todo_id}'] = False
             st.session_state[f'completed_todo_{todo_id}'] = True
-            reset_timer()
+            update_db_todo(df_todo)
         else:
-            st.error('5분 미만은 정산할 수 없습니다.')
+            st.error('취소되었습니다. (최소 5분 이상이어야 정산 가능합니다.)')
+            st.write("")
+            st.write("")
+            st.write("")
+            st.write("")
             time.sleep(2)
             st.session_state[f'settle_time_{todo_id}'] = False
         st.rerun()
 
-    # UI 렌더링
-    if st.session_state[f'completed_todo_{todo_id}']:
-        st.write("<div style='text-align: center;'>정산 완료!!! 🎉</div>", unsafe_allow_html=True)
-        time.sleep(3)
-        st.session_state[f'completed_todo_{todo_id}'] = False
-        st.rerun()
-    else:
-        show_timer_display()
-        if not st.session_state[f'settle_time_{todo_id}']:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.button("시작" if not st.session_state[f'running_{todo_id}'] else "정지",
-                         key=f'toggle_button_{todo_id}',
-                         on_click=start_timer if not st.session_state[f'running_{todo_id}'] else pause_timer)
-            with col2:
-                st.button("리셋", key=f'reset_button_{todo_id}', on_click=reset_timer)
-            with col3:
-                st.button("정산", key=f'settle_button_{todo_id}', on_click=settle_timer)
-        else:
-            if st.button("정산 완료", key=f"confirm_time_{todo_id}"):
-                confirm_completed_todo()
-            if st.button("+5분", key=f"increase_time_{todo_id}"):
-                st.session_state[f'elapsed_time_{todo_id}'] += 300
+    def show_adjust_and_confirm(todo_id):
+        if st.button("위의 시간으로 정산 완료 할까요? (5분 미만 시 취소)", key=f"confirm_time_{todo_id}_{tab}", use_container_width=True):  # tab 추가
+            confirm_completed_todo(todo_id)
+        if st.button("+증가", key=f"increase_time_{todo_id}_{tab}", use_container_width=True):  # tab 추가
+            st.session_state[f'elapsed_time_{todo_id}'] += 300  # 5분 증가
+            st.rerun()
+        if st.button("-감소", key=f"decrease_time_{todo_id}_{tab}", use_container_width=True):  # tab 추가
+            if st.session_state[f'elapsed_time_{todo_id}'] >= 300:
+                st.session_state[f'elapsed_time_{todo_id}'] -= 300  # 5분 감소
                 st.rerun()
-            if st.button("-5분", key=f"decrease_time_{todo_id}"):
-                if st.session_state[f'elapsed_time_{todo_id}'] >= 300:
-                    st.session_state[f'elapsed_time_{todo_id}'] -= 300
-                    st.rerun()
+
+    def show_timer_display(todo_id):
+        if st.session_state[f'running_{todo_id}']:
+            update_elapsed_time()
+
+        hours = st.session_state[f'elapsed_time_{todo_id}'] // 3600
+        minutes = (st.session_state[f'elapsed_time_{todo_id}'] % 3600) // 60
+        seconds = st.session_state[f'elapsed_time_{todo_id}'] % 60
+        timer_display = f"{hours:02}:{minutes:02}:{seconds:02}"
+    
+        # 색상 로직 수정: running 상태를 먼저 체크
+        if st.session_state[f'running_{todo_id}']:
+            timer_color = "#FF0000"  # 진행 중이면 항상 빨강
+        elif st.session_state[f'elapsed_time_{todo_id}'] == 0:
+            timer_color = "#808080"  # 정지 상태이고 초기화면 회색
+        else:
+            timer_color = "#FF8C00"  # 정지 상태이고 시간이 쌓였으면 주황
+
+        timer_html = f"""
+        <div id="timer_{todo_id}" style="font-size: 48px; font-weight: bold; color: {timer_color}; text-align: center;">
+            {timer_display}
+        </div>
+        <script>
+            let seconds = {st.session_state[f'elapsed_time_{todo_id}']};
+            let running = {'true' if st.session_state[f'running_{todo_id}'] else 'false'};
+            let timerElement = document.getElementById('timer_{todo_id}');
+
+            function updateTimerDisplay() {{
+                if (running) {{
+                    seconds++;
+                    let h = Math.floor(seconds / 3600);
+                    let m = Math.floor((seconds % 3600) / 60);
+                    let s = seconds % 60;
+                    timerElement.innerText = 
+                        `${{h.toString().padStart(2, '0')}}:${{m.toString().padStart(2, '0')}}:${{s.toString().padStart(2, '0')}}`;
+                }}
+            }}
+            let intervalId = setInterval(updateTimerDisplay, 1000);
+        </script>
+        """
+        components.html(timer_html, height=60)
+
+    if st.session_state[f'completed_todo_{todo_id}']:
+        show_completed_todo(todo_id)
+    else:
+        show_timer_display(todo_id)
+        if not st.session_state[f'settle_time_{todo_id}']:
+            with st.container():
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.button("정지" if st.session_state[f'running_{todo_id}'] else "시작", 
+                             key=f'toggle_button_{todo_id}_{tab}',  # tab 추가
+                             on_click=toggle_timer,
+                             use_container_width=True)
+                with col2:
+                    st.button("리셋", 
+                             key=f'reset_button_{todo_id}_{tab}',  # tab 추가
+                             on_click=reset_timer,
+                             use_container_width=True)
+                with col3:
+                    st.button("정산", 
+                             key=f'settle_button_{todo_id}_{tab}',  # tab 추가
+                             on_click=settle_timer,
+                             use_container_width=True)
+        else:
+            show_adjust_and_confirm(todo_id)  #정산 버튼 클릭 시 호출 (시간조정, 확인)
+    
+    st.markdown("""
+    <style>
+    div[data-testid="column"] button {
+        padding: 2.5px 1.25px;
+        font-size: 12px;
+        height: 20px;
+        width: 25%;
+        min-width: 10px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+
+
+
+
 
 
     def show_timer_display(todo_id):
@@ -746,9 +823,9 @@ def show_selected_row(selected_data, tab, key):
             show_data_info(selected_data)
             st.markdown("<hr>", unsafe_allow_html=True)
             if tab == 'TODAY':
-                show_stopWatch(selected_data['id'].iloc[0])
+                show_stopWatch(selected_data['id'].iloc[0], tab)
             if tab == '연습중':
-                show_stopWatch(selected_data['id'].iloc[0])
+                show_stopWatch(selected_data['id'].iloc[0], tab)
             if tab == '보류':
                 pass
 
